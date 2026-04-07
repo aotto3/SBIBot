@@ -157,11 +157,13 @@ module.exports = {
     // Also fire a 24h reminder immediately if the meeting is within 24 hours
     // (in case the scheduler already ran today and would miss it).
     const next = utils.nextOccurrence(meeting);
+    console.log(`[schedule-meeting] nextOccurrence=${next} meeting=${JSON.stringify(meeting)}`);
     if (next) {
       const instanceDate = utils.toDateString(next);
       const msPerDay     = 86_400_000;
       const daysAway     = Math.round((next - new Date()) / msPerDay);
 
+      console.log(`[schedule-meeting] calling postMeetingReminder: meetingId=${id} date=${instanceDate} daysAway=${daysAway}`);
       try {
         await postMeetingReminder(interaction.client, meeting, instanceDate, 'created');
         if (daysAway <= 1 && reminder24h) {
