@@ -152,21 +152,20 @@ module.exports = {
     const id      = db.createMeeting(meetingData);
     const meeting = db.getMeeting(id);
 
-    // ── Check if a reminder should fire immediately ───────────────────────────
-    // If the next occurrence is ≤7 days away, post the appropriate reminder now
-    // rather than waiting for the scheduler's next morning run.
+    // ── Post immediately on creation ─────────────────────────────────────────
+    // Always announce the meeting right away so the channel sees it.
+    // Also fire a 24h reminder immediately if the meeting is within 24 hours
+    // (in case the scheduler already ran today and would miss it).
     const next = utils.nextOccurrence(meeting);
     if (next) {
-      const today    = new Date();
-      const msPerDay = 86_400_000;
-      const daysAway = Math.round((next - today) / msPerDay);
-
       const instanceDate = utils.toDateString(next);
+      const msPerDay     = 86_400_000;
+      const daysAway     = Math.round((next - new Date()) / msPerDay);
+
+      await postMeetingReminder(interaction.client, meeting, instanceDate, 'created');
 
       if (daysAway <= 1 && reminder24h) {
         await postMeetingReminder(interaction.client, meeting, instanceDate, '24h');
-      } else if (daysAway <= 7 && reminder7d) {
-        await postMeetingReminder(interaction.client, meeting, instanceDate, '7d');
       }
     }
 
