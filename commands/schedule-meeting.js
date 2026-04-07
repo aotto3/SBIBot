@@ -162,10 +162,14 @@ module.exports = {
       const msPerDay     = 86_400_000;
       const daysAway     = Math.round((next - new Date()) / msPerDay);
 
-      await postMeetingReminder(interaction.client, meeting, instanceDate, 'created');
-
-      if (daysAway <= 1 && reminder24h) {
-        await postMeetingReminder(interaction.client, meeting, instanceDate, '24h');
+      try {
+        await postMeetingReminder(interaction.client, meeting, instanceDate, 'created');
+        if (daysAway <= 1 && reminder24h) {
+          await postMeetingReminder(interaction.client, meeting, instanceDate, '24h');
+        }
+      } catch (err) {
+        console.error(`[schedule-meeting] Failed to post announcement for meeting ${id}:`, err);
+        return interaction.editReply(`✅ Meeting saved (ID: \`${id}\`) but I couldn't post to <#${channel.id}>. Check that I have permission to send messages there.`);
       }
     }
 
