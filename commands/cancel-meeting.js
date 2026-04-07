@@ -29,6 +29,14 @@ module.exports = {
     const schedule = utils.describeSchedule(meeting);
     const time     = utils.formatTime(meeting.time);
 
+    // Post cancellation notice to the meeting channel
+    try {
+      const channel = await interaction.client.channels.fetch(meeting.channel_id);
+      await channel.send(`📅 ~~**${meeting.title}**~~ — ${schedule} at ${time}\n_This meeting has been cancelled._`);
+    } catch (err) {
+      console.error(`[cancel-meeting] Could not post cancellation notice for meeting ${meetingId}:`, err);
+    }
+
     await interaction.reply({
       content: `❌ Cancelled **${meeting.title}** (${schedule} at ${time}).\nPast reminder records are preserved.`,
       flags: MessageFlags.Ephemeral,
