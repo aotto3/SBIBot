@@ -61,20 +61,37 @@ module.exports = {
     const config = SHOWS[showKey];
     const emojis = allEmojisForShow(showKey);
 
-    // ── Format the availability prompt ───────────────────────────────────────
     const [y, mo, d]  = parsedDate.split('-').map(Number);
     const dateDisplay = utils.formatMeetingDate(new Date(y, mo - 1, d));
     const dateTimeDisplay = parsedTime
       ? `${dateDisplay} at ${utils.formatTime(parsedTime)}`
       : dateDisplay;
 
-    const promptLines = buildPromptLines(config, guild);
-    const content = [
-      `@here 📢 **Custom game availability — ${config.label}**`,
-      `Is anyone available on ${dateTimeDisplay}?`,
-      '',
-      ...promptLines,
-    ].join('\n');
+    // ── Create DB record first to get the game ID ─────────────────────────────
+    const id = db.createCustomGame({
+      channel_id:   channel.id,
+      show:         showKey,
+      date:         parsedDate,
+      time:         parsedTime,
+      requester_id: interaction.user.id,
+    });
+
+    // ── Build post content ────────────────────────────────────────────────────
+    const lines = [
+      `**${config.label}**`,
+      `Custom Game Request`,
+      `@here Is anyone available on ${dateTimeDisplay}?`,
+    ];
+
+    // React prompt: skip for MFB (role-grouped emojis speak for themselves)
+    if (!config.roleGroups) {
+      const promptLines = buildPromptLines(config, guild);
+      lines.push('', ...promptLines);
+    }
+
+    lines.push(`_Game ID: ${id}_`);
+
+    const content = lines.join('\n');
 
     // ── Post and react ────────────────────────────────────────────────────────
     let targetChannel;
@@ -90,14 +107,6 @@ module.exports = {
       await reactWith(msg, guild, emoji);
     }
 
-    // ── Save to DB ────────────────────────────────────────────────────────────
-    const id = db.createCustomGame({
-      channel_id:   channel.id,
-      show:         showKey,
-      date:         parsedDate,
-      time:         parsedTime,
-      requester_id: interaction.user.id,
-    });
     db.setCustomGameMessageId(id, msg.id);
 
     await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateTimeDisplay} in <#${channel.id}>. (Game ID: \`${id}\`)`);
@@ -105,22 +114,11 @@ module.exports = {
 };
 
 /**
- * Build the react-prompt lines for the post.
- * Single-emoji-per-group shows get a compact one-liner.
- * Multi-emoji groups (MFB) get one line per group.
+ * Build the compact react-prompt line for shows with single emojis per group.
  */
 function buildPromptLines(config, guild) {
   const { emojis } = config;
   const groups     = [emojis.yes, emojis.maybe, emojis.no];
-  const isCompact  = groups.every(g => g.length === 1);
-
-  if (isCompact) {
-    const parts = groups.map(g => `${emojiDisplay(guild, g[0])} ${g[0].label.toLowerCase()}`);
-    return [`React: ${parts.join('  ')}`];
-  }
-
-  // Multi-emoji layout: one line per group, items within a group separated by |
-  return groups.map(group =>
-    group.map(e => `${emojiDisplay(guild, e)} ${e.label}`).join('  |  ')
-  );
+  const parts      = groups.map(g => `${emojiDisplay(guild, g[0])} ${g[0].label.toLowerCase()}`);
+  return [`React: ${parts.join('  ')}`];
 }
