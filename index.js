@@ -55,6 +55,23 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+// Railway (and other hosts) send SIGTERM when stopping/restarting the container.
+// Without a handler, Node exits with a signal code and npm reports "command failed".
+// Handling it explicitly lets the Discord client disconnect cleanly and exit 0.
+
+process.on('SIGTERM', () => {
+  console.log('[shutdown] SIGTERM received — disconnecting and exiting');
+  client.destroy();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('[shutdown] SIGINT received — disconnecting and exiting');
+  client.destroy();
+  process.exit(0);
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 client.login(process.env.DISCORD_TOKEN);
