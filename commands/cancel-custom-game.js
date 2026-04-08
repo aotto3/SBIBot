@@ -4,26 +4,20 @@ const db = require('../lib/db');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('cancel-custom-game')
-    .setDescription('Close a custom game availability post')
+    .setDescription('Cancel a custom game availability post and delete it from the channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addIntegerOption(opt =>
       opt.setName('game_id')
-        .setDescription('Game ID (shown in the bot reply when the post was created)')
+        .setDescription('Game ID (shown on the post itself, or in the bot reply when created)')
         .setRequired(true)
-    )
-    .addBooleanOption(opt =>
-      opt.setName('notify')
-        .setDescription('Post a notice in the channel? (default: yes)')
-        .setRequired(false)
     ),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const gameId = interaction.options.getInteger('game_id');
-    const notify = interaction.options.getBoolean('notify') ?? true;
+    const game   = db.getCustomGameById(gameId);
 
-    const game = db.getCustomGameById(gameId);
     if (!game) {
       return interaction.editReply(`No custom game found with ID \`${gameId}\`.`);
     }
@@ -34,15 +28,17 @@ module.exports = {
 
     db.deactivateCustomGame(gameId);
 
-    if (notify && game.channel_id) {
+    // Delete the original post
+    if (game.channel_id && game.message_id) {
       try {
         const channel = await interaction.client.channels.fetch(game.channel_id);
-        await channel.send('_This availability post has been closed._');
+        const message = await channel.messages.fetch(game.message_id);
+        await message.delete();
       } catch (err) {
-        console.error(`[cancel-custom-game] Failed to notify channel for game ${gameId}:`, err.message);
+        console.error(`[cancel-custom-game] Failed to delete post for game ${gameId}:`, err.message);
       }
     }
 
-    await interaction.editReply(`✅ Custom game \`${gameId}\` closed.`);
+    await interaction.editReply(`✅ Custom game \`${gameId}\` cancelled and post deleted.`);
   },
 };
