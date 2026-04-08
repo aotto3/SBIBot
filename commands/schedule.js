@@ -25,7 +25,7 @@ module.exports = {
         return interaction.editReply(`Couldn't parse date \`${weekOfStr}\`. Try: \`May 14\`, \`5/14/2026\`, \`2026-05-14\``);
       }
     } else {
-      startDate = utils.toDateString(new Date());
+      startDate = utils.todayCentral();
     }
 
     const [y, mo, d] = startDate.split('-').map(Number);

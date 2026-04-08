@@ -45,6 +45,20 @@ Schedule a **repeating** meeting (weekly or monthly). Works the same as above bu
 
 ---
 
+### `/edit-meeting` 🔒
+Edit an existing scheduled meeting. Only updates the database — already-posted reminder messages are not changed.
+
+| Option | Required | Notes |
+|---|---|---|
+| `meeting_id` | ✅ | From `/meetings` |
+| `title` | optional | New title |
+| `date` | optional | New date — one-time meetings only |
+| `time` | optional | New start time |
+| `duration` | optional | New duration |
+| `channel` | optional | New channel for future reminders |
+
+---
+
 ### `/cancel-meeting` 🔒
 Cancel a meeting. Posts a strikethrough notice in the meeting's channel so everyone sees it's off.
 
@@ -95,7 +109,9 @@ Post an availability check asking who can do a custom game. The bot pings `@here
 - Reactions for that show are added (MFB uses the custom :dno: :hno: :dmaybe: :hmaybe: emojis)
 - As people react, their names and roles appear on the post in real time
 - Once every role is covered with a ✅, the bot privately DMs whoever posted the request with the cast list
-- If no one fills the request after 48 hours, the bot posts a reminder in the channel tagging the requester
+- If no one fills the request after 48 hours, the bot posts a reminder in the channel. For multi-role shows (MFB, The Endings), it pings only the specific unfilled role(s) instead of @here
+
+> The bot reply when you run `/custom-game` includes a **Game ID** — save it if you may need to cancel the post later with `/cancel-custom-game`.
 
 **Show reactions:**
 
@@ -107,6 +123,16 @@ Post an availability check asking who can do a custom game. The bot pings `@here
 | Lucidity | ✅ available · ❓ maybe · ❌ unavailable |
 
 > Role labels (Daphne, Houdini, HR, Author) are pulled automatically from your Discord server roles. Mikey and Riley are assigned automatically for GGB and Lucidity.
+
+---
+
+### `/cancel-custom-game` 🔒
+Close a custom game availability post (e.g. if it's no longer needed before the 48-hour reminder fires).
+
+| Option | Required | Notes |
+|---|---|---|
+| `game_id` | ✅ | Shown in the bot reply when you ran `/custom-game` |
+| `notify` | optional | Post a notice in the channel? (default: yes) |
 
 ---
 
@@ -170,6 +196,13 @@ Show all current Bookeo ↔ Discord links.
 
 ---
 
+## Help
+
+### `/help` 👥
+Show a summary of all available commands. Only you can see the response.
+
+---
+
 ## Bot Settings
 
 ### `/bot-config` 🔒
@@ -188,13 +221,16 @@ Turn automated shift DM features on or off.
 |---|---|
 | Schedule a one-time event | `/schedule-meeting` |
 | Set up a repeating meeting | `/schedule-recurring` |
+| Edit a meeting's details | `/edit-meeting` |
 | Cancel a meeting | `/cancel-meeting` |
 | See all my meetings | `/meetings` |
 | See who's coming to a meeting | `/attendance` |
 | Ask who's free for a custom game | `/custom-game` |
+| Close a custom game post | `/cancel-custom-game` |
 | See this week's show schedule | `/schedule` |
 | See someone's upcoming shifts | `/member-schedule` |
 | Send shift DMs right now | `/send-shift-reminders` |
 | Connect a cast member to Discord | `/link-member` |
 | See all linked cast members | `/list-members` |
 | Turn automated DMs on/off | `/bot-config` |
+| See all commands | `/help` |
