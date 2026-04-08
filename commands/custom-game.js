@@ -1,0 +1,104 @@
+const { SlashCommandBuilder, ChannelType, MessageFlags } = require('discord.js');
+const db                    = require('../lib/db');
+const utils                 = require('../lib/utils');
+const { SHOWS, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('custom-game')
+    .setDescription('Post a custom game availability check for a show')
+    // No permission restriction — any cast member can post one
+    .addStringOption(opt =>
+      opt.setName('show')
+        .setDescription('Which show?')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Man From Beyond', value: 'MFB'      },
+          { name: 'The Endings',     value: 'Endings'  },
+          { name: 'Great Gold Bird', value: 'GGB'      },
+          { name: 'Lucidity',        value: 'Lucidity' },
+        )
+    )
+    .addStringOption(opt =>
+      opt.setName('date')
+        .setDescription('Date of the custom game (e.g. April 20, 4/20, 2026-04-20)')
+        .setRequired(true)
+    )
+    .addChannelOption(opt =>
+      opt.setName('channel')
+        .setDescription('Channel to post in')
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    ),
+
+  async execute(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const showKey   = interaction.options.getString('show');
+    const dateStr   = interaction.options.getString('date');
+    const channel   = interaction.options.getChannel('channel');
+    const guild     = interaction.guild;
+
+    const parsedDate = utils.parseDate(dateStr);
+    if (!parsedDate) {
+      return interaction.editReply(`Couldn't parse date \`${dateStr}\`. Try: \`April 20\`, \`4/20/2026\`, \`2026-04-20\``);
+    }
+
+    const config  = SHOWS[showKey];
+    const emojis  = allEmojisForShow(showKey);
+
+    // ── Format the availability prompt ───────────────────────────────────────
+    const [y, mo, d] = parsedDate.split('-').map(Number);
+    const dateDisplay = utils.formatMeetingDate(new Date(y, mo - 1, d));
+
+    const promptLines = buildPromptLines(config, guild);
+    const content = [
+      `📢 **Custom game availability — ${config.label}**`,
+      `Is anyone available on ${dateDisplay}?`,
+      '',
+      ...promptLines,
+    ].join('\n');
+
+    // ── Post and react ────────────────────────────────────────────────────────
+    let targetChannel;
+    try {
+      targetChannel = await interaction.client.channels.fetch(channel.id);
+    } catch (err) {
+      return interaction.editReply(`Couldn't access <#${channel.id}>: ${err.message}`);
+    }
+
+    const msg = await targetChannel.send(content);
+
+    // Add reactions in order: yes → maybe → no
+    for (const emoji of emojis) {
+      await reactWith(msg, guild, emoji);
+    }
+
+    // ── Save to DB ────────────────────────────────────────────────────────────
+    const id = db.createCustomGame({ channel_id: channel.id, show: showKey, date: parsedDate });
+    db.setCustomGameMessageId(id, msg.id);
+
+    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateDisplay} in <#${channel.id}>.`);
+  },
+};
+
+/**
+ * Build the react-prompt lines for the post.
+ * Single-emoji-per-group shows get a compact one-liner.
+ * Multi-emoji groups (MFB) get one line per group.
+ */
+function buildPromptLines(config, guild) {
+  const { emojis } = config;
+  const groups     = [emojis.yes, emojis.maybe, emojis.no];
+  const isCompact  = groups.every(g => g.length === 1);
+
+  if (isCompact) {
+    const parts = groups.map(g => `${emojiDisplay(guild, g[0])} ${g[0].label.toLowerCase()}`);
+    return [`React: ${parts.join('  ')}`];
+  }
+
+  // Multi-emoji layout: one line per group, items within a group separated by  |
+  return groups.map(group =>
+    group.map(e => `${emojiDisplay(guild, e)} ${e.label}`).join('  |  ')
+  );
+}
