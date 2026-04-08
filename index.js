@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const { Client, GatewayIntentBits, Collection, Events, Partials } = require('discord.js');
+const { handleReactionChange } = require('./lib/rsvp');
 const fs   = require('fs');
 const path = require('path');
 
@@ -35,6 +36,26 @@ client.once(Events.ClientReady, c => {
   console.log(`Logged in as ${c.user.tag}`);
   require('./lib/scheduler').start(client);
 });
+
+// ─── RSVP reaction tracker ────────────────────────────────────────────────────
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    await handleReactionChange(client, reaction, user);
+  } catch (err) {
+    console.error('[rsvp] Unhandled error on reaction add:', err);
+  }
+});
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  try {
+    await handleReactionChange(client, reaction, user);
+  } catch (err) {
+    console.error('[rsvp] Unhandled error on reaction remove:', err);
+  }
+});
+
+// ─── Slash commands ───────────────────────────────────────────────────────────
 
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
