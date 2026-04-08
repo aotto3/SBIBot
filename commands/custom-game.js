@@ -29,6 +29,11 @@ module.exports = {
         .setDescription('Channel to post in')
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt.setName('time')
+        .setDescription('Time of the custom game (e.g. 7pm, 7:30pm, 19:00) — optional')
+        .setRequired(false)
     ),
 
   async execute(interaction) {
@@ -36,6 +41,7 @@ module.exports = {
 
     const showKey   = interaction.options.getString('show');
     const dateStr   = interaction.options.getString('date');
+    const timeStr   = interaction.options.getString('time') ?? null;
     const channel   = interaction.options.getChannel('channel');
     const guild     = interaction.guild;
 
@@ -44,17 +50,28 @@ module.exports = {
       return interaction.editReply(`Couldn't parse date \`${dateStr}\`. Try: \`April 20\`, \`4/20/2026\`, \`2026-04-20\``);
     }
 
-    const config  = SHOWS[showKey];
-    const emojis  = allEmojisForShow(showKey);
+    let parsedTime = null;
+    if (timeStr) {
+      parsedTime = utils.parseTime(timeStr);
+      if (!parsedTime) {
+        return interaction.editReply(`Couldn't parse time \`${timeStr}\`. Try: \`7pm\`, \`7:30pm\`, \`19:00\``);
+      }
+    }
+
+    const config = SHOWS[showKey];
+    const emojis = allEmojisForShow(showKey);
 
     // ── Format the availability prompt ───────────────────────────────────────
-    const [y, mo, d] = parsedDate.split('-').map(Number);
+    const [y, mo, d]  = parsedDate.split('-').map(Number);
     const dateDisplay = utils.formatMeetingDate(new Date(y, mo - 1, d));
+    const dateTimeDisplay = parsedTime
+      ? `${dateDisplay} at ${utils.formatTime(parsedTime)}`
+      : dateDisplay;
 
     const promptLines = buildPromptLines(config, guild);
     const content = [
-      `📢 **Custom game availability — ${config.label}**`,
-      `Is anyone available on ${dateDisplay}?`,
+      `@here 📢 **Custom game availability — ${config.label}**`,
+      `Is anyone available on ${dateTimeDisplay}?`,
       '',
       ...promptLines,
     ].join('\n');
@@ -69,16 +86,21 @@ module.exports = {
 
     const msg = await targetChannel.send(content);
 
-    // Add reactions in order: yes → maybe → no
     for (const emoji of emojis) {
       await reactWith(msg, guild, emoji);
     }
 
     // ── Save to DB ────────────────────────────────────────────────────────────
-    const id = db.createCustomGame({ channel_id: channel.id, show: showKey, date: parsedDate });
+    const id = db.createCustomGame({
+      channel_id:   channel.id,
+      show:         showKey,
+      date:         parsedDate,
+      time:         parsedTime,
+      requester_id: interaction.user.id,
+    });
     db.setCustomGameMessageId(id, msg.id);
 
-    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateDisplay} in <#${channel.id}>.`);
+    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateTimeDisplay} in <#${channel.id}>.`);
   },
 };
 
@@ -97,7 +119,7 @@ function buildPromptLines(config, guild) {
     return [`React: ${parts.join('  ')}`];
   }
 
-  // Multi-emoji layout: one line per group, items within a group separated by  |
+  // Multi-emoji layout: one line per group, items within a group separated by |
   return groups.map(group =>
     group.map(e => `${emojiDisplay(guild, e)} ${e.label}`).join('  |  ')
   );
