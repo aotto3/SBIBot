@@ -93,6 +93,10 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 client.login(process.env.DISCORD_TOKEN);

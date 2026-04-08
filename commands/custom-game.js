@@ -100,7 +100,7 @@ module.exports = {
     });
     db.setCustomGameMessageId(id, msg.id);
 
-    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateTimeDisplay} in <#${channel.id}>.`);
+    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateTimeDisplay} in <#${channel.id}>. (Game ID: \`${id}\`)`);
   },
 };
 
