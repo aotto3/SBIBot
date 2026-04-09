@@ -77,6 +77,20 @@ module.exports = {
       return interaction.editReply(`No shifts found between \`${startDate}\` and \`${endDate}\`.`);
     }
 
+    // Filter to the requested date range — the bookeo-asst API ignores the `to`
+    // parameter and always returns a full week. We enforce the window ourselves.
+    shifts = shifts.filter(s => s.date >= startDate && s.date <= endDate);
+    console.log(`[send-shift-reminders] after date filter: ${shifts.length} shift(s) in range`);
+
+    if (!shifts.length) {
+      return interaction.editReply(`No shifts found within \`${startDate}\` → \`${endDate}\` after filtering. (API returned dates outside this range — see logs.)`);
+    }
+
+    // Preview mode requires a specific user — the full cast output exceeds Discord's 2000-char limit
+    if (preview && !targetUser) {
+      return interaction.editReply('Please specify a `user` when using `preview:true`. Example:\n`/send-shift-reminders mode:Next 24 hours user:@Emily preview:true`');
+    }
+
     // If targeting one user, resolve their Bookeo name and filter
     let grouped = bookeo.groupByCastMember(shifts);
 
