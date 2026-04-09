@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-09
 
 ---
 
@@ -79,11 +79,12 @@ All meeting and custom game posts update in real time as people react. Shows fir
 ### Shift DMs (Bookeo integration)
 - `/schedule` — view full week schedule from Bookeo
 - `/member-schedule` — view one person's schedule (by name or @mention)
-- `/send-shift-reminders` — manually trigger shift DMs
+- `/send-shift-reminders` — manually trigger shift DMs, or preview what would be sent to one person (`user` + `preview:true`) without actually sending
 - Weekly shift DMs every Monday 9am CT (toggleable)
 - Daily 24h shift DMs every day 9am CT (toggleable)
 - `/bot-config` — toggle weekly/daily shift DMs on/off
 - Bookeo API responses are cached for 5 minutes
+- **Known bookeo-asst quirk:** the `/api/schedule` endpoint ignores the `to` param and always returns ~7 days. We filter results client-side after every call. Raised with J Cameron Cooper for a proper fix.
 
 ### Cast member linking
 - `/link-member bookeo_name:"First Last" discord:@User` — links Bookeo name to Discord user (enables shift DMs and first-name display)

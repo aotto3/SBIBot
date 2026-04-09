@@ -167,12 +167,20 @@ Show one cast member's upcoming shifts for the next 7 days.
 ---
 
 ### `/send-shift-reminders` 🔒
-Manually send shift DMs to all cast members with shifts in the selected window. Normally this runs automatically (Mondays for the week ahead, daily for the next 24 hours), but this lets you trigger it on demand.
+Send shift DMs — or preview exactly what would be sent to one person without actually DMing anyone. Normally runs automatically (Mondays for the week ahead, daily at 9am for the next 24 hours).
 
 | Option | Required | Notes |
 |---|---|---|
 | `mode` | optional | This week (default) · Next 24 hours |
+| `user` | optional | Only process this one person (omit for everyone) |
+| `preview` | optional | Show the DM text here instead of sending it — requires `user` |
 | `week_of` | optional | Start date — defaults to today |
+
+**Testing example:**
+```
+/send-shift-reminders mode:Next 24 hours user:@Emily preview:true
+```
+Shows exactly what Emily would receive for the next 24 hours. Nothing is sent.
 
 ---
 
@@ -237,7 +245,7 @@ Turn automated shift DM features on or off.
 | Cancel and delete a custom game post | `/cancel-custom-game` |
 | See this week's show schedule | `/schedule` |
 | See someone's upcoming shifts | `/member-schedule` |
-| Send shift DMs right now | `/send-shift-reminders` |
+| Send or preview shift DMs | `/send-shift-reminders` |
 | Connect a cast member to Discord | `/link-member` |
 | See all linked cast members | `/list-members` |
 | Turn automated DMs on/off | `/bot-config` |
