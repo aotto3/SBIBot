@@ -71,6 +71,8 @@ const { Routes } = require('discord-api-types/v10');  // ← correct
 
 **Bookeo API cache**: `lib/bookeo.js` caches responses for 5 minutes in a module-level `Map` keyed on `from|to` params. Avoids redundant calls when multiple commands run close together.
 
+**bookeo-asst ignores the `to` query parameter** — it always returns a full week of shifts regardless of what `to` is set to. Both `runShiftDMs` in `lib/scheduler.js` and `/send-shift-reminders` filter results client-side after the API call: `shifts.filter(s => s.date >= from && s.date <= to)`. Do not remove this filter — without it, cast members receive DMs for shifts outside the intended window.
+
 ### Meeting reminders
 
 Three reminder types exist:
