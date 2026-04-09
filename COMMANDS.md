@@ -10,7 +10,7 @@ All commands are typed directly in Discord starting with `/`. Discord will show 
 ## Meetings
 
 ### `/schedule-meeting` 🔒
-Schedule a **one-time** meeting. The bot immediately posts an announcement in the chosen channel and adds ✅ ❌ ❓ reactions for RSVPs. Reminders are automatically sent 7 days and 24 hours before.
+Schedule a **one-time** meeting. The bot immediately posts an announcement in the chosen channel with ✅ ❌ ❓ reactions for RSVPs. Reminders are automatically sent 7 days and 24 hours before. Posts show start–end time (e.g. 7:00 PM – 9:00 PM) and a Google Calendar link.
 
 | Option | Required | Example |
 |---|---|---|
@@ -24,6 +24,8 @@ Schedule a **one-time** meeting. The bot immediately posts an announcement in th
 | `reminder_24h` | optional | on (default) |
 
 > **Target: Specific members** — Use this if you only want to ping certain people. After creating the meeting, use `/meeting-add-member` to add them.
+
+> The Meeting ID appears at the bottom of every reminder post. You'll need it for `/edit-meeting` and `/cancel-meeting`.
 
 ---
 
@@ -46,11 +48,11 @@ Schedule a **repeating** meeting (weekly or monthly). Works the same as above bu
 ---
 
 ### `/edit-meeting` 🔒
-Edit an existing scheduled meeting. Only updates the database — already-posted reminder messages are not changed.
+Edit an existing scheduled meeting. Only updates the database — already-posted reminder messages are not retroactively changed.
 
 | Option | Required | Notes |
 |---|---|---|
-| `meeting_id` | ✅ | From `/meetings` |
+| `meeting_id` | ✅ | Shown on the post itself, or from `/meetings` |
 | `title` | optional | New title |
 | `date` | optional | New date — one-time meetings only |
 | `time` | optional | New start time |
@@ -64,7 +66,7 @@ Cancel a meeting. Posts a strikethrough notice in the meeting's channel so every
 
 | Option | Required | Notes |
 |---|---|---|
-| `meeting_id` | ✅ | The number shown when the meeting was created, or from `/meetings` |
+| `meeting_id` | ✅ | Shown on the post itself, or from `/meetings` |
 
 ---
 
@@ -96,7 +98,7 @@ See a breakdown of who responded to a meeting's RSVP — attending, not attendin
 ## Custom Game Availability
 
 ### `/custom-game` 👥
-Post an availability check asking who can do a custom game. The bot pings `@here`, adds the correct reaction emojis for that show, and tracks responses live on the post.
+Post a custom game availability check for a show. The bot posts to the chosen channel and adds the correct reaction emojis. Responses are tracked live on the post.
 
 | Option | Required | Example |
 |---|---|---|
@@ -105,34 +107,40 @@ Post an availability check asking who can do a custom game. The bot pings `@here
 | `channel` | ✅ | #mfb-cast |
 | `time` | optional | 7pm |
 
-**What happens automatically:**
-- Reactions for that show are added (MFB uses the custom :dno: :hno: :dmaybe: :hmaybe: emojis)
-- As people react, their names and roles appear on the post in real time
-- Once every role is covered with a ✅, the bot privately DMs whoever posted the request with the cast list
-- If no one fills the request after 48 hours, the bot posts a reminder in the channel. For multi-role shows (MFB, The Endings), it pings only the specific unfilled role(s) instead of @here
+**Post format:**
+```
+The Man From Beyond
+Custom Game Request
+@here Is anyone available on Tuesday, April 20, 2026 at 7:00 PM?
+Game ID: 42
+```
 
-> The bot reply when you run `/custom-game` includes a **Game ID** — save it if you may need to cancel the post later with `/cancel-custom-game`.
+**What happens automatically:**
+- Show-specific reactions are added. MFB uses custom emojis `:Dmaybe:` `:Hmaybe:` `:Dno:` `:Hno:` (plus ✅)
+- As people react, a live tracker updates on the post showing who responded. MFB shows a **Daphne / Houdini** section breakdown; other shows show emoji-grouped lists with role labels
+- Once every role is covered with ✅, the bot **privately DMs the requester** with the cast list
+- If unfilled after 48 hours, a reminder is posted in the channel. For MFB and The Endings it pings only the specific unfilled role(s); other shows get `@here`
+- The **Game ID is printed on the post itself** — use it with `/cancel-custom-game` if you need to pull the post
 
 **Show reactions:**
 
-| Show | Emojis |
+| Show | Reactions |
 |---|---|
-| Man From Beyond | ✅ available · :dmaybe: Daphne maybe · :hmaybe: Houdini maybe · :dno: Daphne no · :hno: Houdini no |
+| Man From Beyond | ✅ available · :Dmaybe: Daphne maybe · :Hmaybe: Houdini maybe · :Dno: Daphne no · :Hno: Houdini no |
 | The Endings | ✅ available · ❓ maybe · ❌ unavailable |
 | Great Gold Bird | ✅ available · ❓ maybe · ❌ unavailable |
 | Lucidity | ✅ available · ❓ maybe · ❌ unavailable |
 
-> Role labels (Daphne, Houdini, HR, Author) are pulled automatically from your Discord server roles. Mikey and Riley are assigned automatically for GGB and Lucidity.
+> Role labels (Daphne, Houdini, HR, Author) are pulled from Discord server roles. Mikey and Riley are assigned automatically for GGB and Lucidity.
 
 ---
 
 ### `/cancel-custom-game` 🔒
-Close a custom game availability post (e.g. if it's no longer needed before the 48-hour reminder fires).
+Cancel a custom game availability post. **Deletes the original post** from the channel and marks the game closed in the database.
 
 | Option | Required | Notes |
 |---|---|---|
-| `game_id` | ✅ | Shown in the bot reply when you ran `/custom-game` |
-| `notify` | optional | Post a notice in the channel? (default: yes) |
+| `game_id` | ✅ | Printed on the post itself (bottom line) |
 
 ---
 
@@ -226,7 +234,7 @@ Turn automated shift DM features on or off.
 | See all my meetings | `/meetings` |
 | See who's coming to a meeting | `/attendance` |
 | Ask who's free for a custom game | `/custom-game` |
-| Close a custom game post | `/cancel-custom-game` |
+| Cancel and delete a custom game post | `/cancel-custom-game` |
 | See this week's show schedule | `/schedule` |
 | See someone's upcoming shifts | `/member-schedule` |
 | Send shift DMs right now | `/send-shift-reminders` |
