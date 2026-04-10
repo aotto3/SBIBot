@@ -1,7 +1,19 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, Collection, Events, Partials } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  Events,
+  Partials,
+  MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require('discord.js');
 const { handleReactionChange } = require('./lib/rsvp');
+const db   = require('./lib/db');
+const { SHOWS } = require('./lib/shows');
 const fs   = require('fs');
 const path = require('path');
 
@@ -55,9 +67,88 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
   }
 });
 
-// ─── Slash commands ───────────────────────────────────────────────────────────
+// ─── Check-in button handler ──────────────────────────────────────────────────
+
+async function handleCheckinButton(interaction) {
+  const parts    = interaction.customId.split(':');
+  const show     = parts[1];
+  const date     = parts[2];
+  const rec      = db.getCheckinRecordByDiscordAndShow(interaction.user.id, show, date);
+
+  if (!rec) {
+    await interaction.reply({ content: 'No check-in record found for you.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (rec.checked_in_at) {
+    await interaction.reply({ content: 'You already checked in!', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  db.markCheckedIn(rec.id);
+
+  const timeStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date());
+
+  // Rebuild the message rows, disabling the clicked button with a timestamp
+  const updatedRows = interaction.message.components.map(row => {
+    const components = row.components.map(btn => {
+      if (btn.customId === interaction.customId) {
+        return new ButtonBuilder()
+          .setCustomId(`checkin_done:${show}:${date}`)
+          .setLabel(`✅ Checked in at ${timeStr} CT`)
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(true);
+      }
+      return ButtonBuilder.from(btn.toJSON());
+    });
+    return new ActionRowBuilder().addComponents(components);
+  });
+
+  await interaction.update({ components: updatedRows });
+  console.log(`[checkin] ${interaction.user.tag} checked in for ${show} on ${date} via DM button`);
+}
+
+// ─── Check-in select menu handler ────────────────────────────────────────────
+
+async function handleCheckinSelect(interaction) {
+  const date = interaction.customId.split(':')[1];
+  const show = interaction.values[0];
+  const rec  = db.getCheckinRecordByDiscordAndShow(interaction.user.id, show, date);
+
+  if (!rec) {
+    await interaction.update({ content: 'No check-in record found.', components: [] });
+    return;
+  }
+  if (rec.checked_in_at) {
+    await interaction.update({ content: 'You already checked in for that show!', components: [] });
+    return;
+  }
+
+  db.markCheckedIn(rec.id);
+  await interaction.update({
+    content: `✅ Checked in for **${SHOWS[show].label}** today.`,
+    components: [],
+  });
+  console.log(`[checkin] ${interaction.user.tag} checked in for ${show} on ${date} via /check-in select`);
+}
+
+// ─── Slash commands and component interactions ────────────────────────────────
 
 client.on(Events.InteractionCreate, async interaction => {
+  // Check-in button (from daily DM)
+  if (interaction.isButton() && interaction.customId.startsWith('checkin:')) {
+    try { await handleCheckinButton(interaction); } catch (err) { console.error('[checkin] Button handler error:', err); }
+    return;
+  }
+
+  // Check-in select menu (from /check-in command)
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checkin_select:')) {
+    try { await handleCheckinSelect(interaction); } catch (err) { console.error('[checkin] Select handler error:', err); }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
