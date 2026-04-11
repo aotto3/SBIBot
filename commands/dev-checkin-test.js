@@ -15,7 +15,7 @@ const {
 const db    = require('../lib/db');
 const utils = require('../lib/utils');
 const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
-const { scheduleCheckinAlert } = require('../lib/checkin');
+const checkin = require('../lib/checkin');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -81,7 +81,7 @@ module.exports = {
     }
 
     // Schedule the no-show alert
-    scheduleCheckinAlert(interaction.client, rec);
+    checkin.scheduleCheckinAlert(rec);
 
     // Send the DM
     const showLabel = showLabel(show);

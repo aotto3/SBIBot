@@ -12,10 +12,10 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { handleReactionChange } = require('./lib/rsvp');
-const db   = require('./lib/db');
-const { SHOWS } = require('./lib/shows');
-const { seedTodayCheckins, scheduleCheckinAlert, editAlertForLateCheckin } = require('./lib/checkin');
-const utils = require('./lib/utils');
+const db      = require('./lib/db');
+const checkin = require('./lib/checkin');
+const { showLabel } = require('./lib/shows');
+const utils   = require('./lib/utils');
 const fs   = require('fs');
 const path = require('path');
 
@@ -51,26 +51,11 @@ client.once(Events.ClientReady, async c => {
   require('./lib/scheduler').start(client);
 
   // ── Check-in seeding & startup recovery ────────────────────────────────────
-  // Seed today's check-in records from Bookeo, then schedule alerts.
-  // Also reschedules any pending alerts that were lost during a redeploy.
+  checkin.init(client);
   try {
-    await seedTodayCheckins(client);
+    await checkin.seedAndScheduleToday();
   } catch (err) {
-    console.error('[checkin] seedTodayCheckins failed on startup:', err);
-  }
-
-  // Recovery: reschedule alerts for any records that were pending before
-  // seedTodayCheckins ran (i.e. seeded in a previous boot, not yet checked in).
-  // seedTodayCheckins already scheduled newly-upserted records; this catches
-  // records that pre-existed (INSERT OR IGNORE skipped them, so scheduleCheckinAlert
-  // wasn't called for them above).
-  const today   = utils.todayCentral();
-  const pending = db.getPendingCheckins(today);
-  for (const rec of pending) {
-    scheduleCheckinAlert(client, rec);
-  }
-  if (pending.length) {
-    console.log(`[checkin] Recovery: rescheduled ${pending.length} pending alert(s) from previous boot`);
+    console.error('[checkin] seedAndScheduleToday failed on startup:', err);
   }
 });
 
@@ -109,10 +94,7 @@ async function handleCheckinButton(interaction) {
     return;
   }
 
-  db.markCheckedIn(rec.id);
-
-  const fresh = db.getCheckinRecordById(rec.id);
-  await editAlertForLateCheckin(interaction.client, fresh);
+  await checkin.performCheckin(rec.id);
 
   const timeStr = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
@@ -154,11 +136,9 @@ async function handleCheckinSelect(interaction) {
     return;
   }
 
-  db.markCheckedIn(rec.id);
-  const freshSelect = db.getCheckinRecordById(rec.id);
-  await editAlertForLateCheckin(interaction.client, freshSelect);
+  await checkin.performCheckin(rec.id);
   await interaction.update({
-    content: `✅ Checked in for **${SHOWS[show].label}** today.`,
+    content: `✅ Checked in for **${showLabel(show)}** today.`,
     components: [],
   });
   console.log(`[checkin] ${interaction.user.tag} checked in for ${show} on ${date} via /check-in select`);
