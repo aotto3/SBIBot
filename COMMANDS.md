@@ -184,6 +184,81 @@ Shows exactly what Emily would receive for the next 24 hours. Nothing is sent.
 
 ---
 
+## Check-in System
+
+These commands manage the cast check-in system. On show days, eligible cast members receive a "Check in" button in their shift DM and can also run `/check-in` directly. If a cast member hasn't checked in by call time, the bot posts a no-show alert to the configured channel.
+
+**Eligible shows and roles:**
+- Great Gold Bird — Mikey (30 min before show)
+- Lucidity — Riley (30 min before show)
+- The Endings — HR only (Author is excluded)
+
+MFB does not use the check-in system.
+
+### `/check-in` 👥
+Check in for your shift today. If you have one eligible shift, it confirms immediately. If you have multiple, a select menu lets you pick which show. Handles already-checked-in and no-shift cases with appropriate messages.
+
+---
+
+### `/force-checkin` 🔒
+Manually confirm a cast member as checked in (e.g. they showed up but couldn't use the button). If the no-show alert has already fired, the alert message is edited to show "Manually confirmed by @Admin at H:MM CT".
+
+| Option | Required | Notes |
+|---|---|---|
+| `user` | ✅ | @mention the cast member |
+| `show` | optional | Required if the person has multiple eligible shifts today |
+
+---
+
+### `/set-checkin-channel` 🔒
+Set the channel where no-show alerts are posted for a specific show. Must be run once per show before the check-in system will fire alerts.
+
+| Option | Required | Notes |
+|---|---|---|
+| `show` | ✅ | GGB · Lucidity · Endings |
+| `channel` | ✅ | #channel to post alerts in |
+
+---
+
+### `/add-checkin-contact` 🔒
+Add a user to the no-show notification ping list. All contacts are pinged (along with the cast member themselves) when a no-show alert fires.
+
+| Option | Required |
+|---|---|
+| `user` | ✅ — @mention them |
+
+---
+
+### `/remove-checkin-contact` 🔒
+Remove a user from the no-show notification list.
+
+| Option | Required |
+|---|---|
+| `user` | ✅ — @mention them |
+
+---
+
+### `/list-checkin-contacts` 🔒
+Show the current no-show notification ping list.
+
+---
+
+### `/dev-checkin-test` 🔒 *(dev/testing tool)*
+Developer commands for testing the check-in system. Not intended for regular use.
+
+| Subcommand | What it does |
+|---|---|
+| `seed` | Seed a test check-in record and send the DM button for a specific show/user |
+| `clear` | Delete all check-in records for today |
+
+| Option | Required | Notes |
+|---|---|---|
+| `action` | ✅ | seed · clear |
+| `show` | `seed` only | Which show to seed a record for |
+| `user` | `seed` only | Which cast member to test |
+
+---
+
 ## Cast Member Setup
 
 These commands connect a cast member's name in Bookeo to their Discord account, which enables shift DMs and shows their first name on RSVP posts.
@@ -249,4 +324,8 @@ Turn automated shift DM features on or off.
 | Connect a cast member to Discord | `/link-member` |
 | See all linked cast members | `/list-members` |
 | Turn automated DMs on/off | `/bot-config` |
+| Check in for my shift today | `/check-in` |
+| Manually confirm someone checked in | `/force-checkin` |
+| Set the no-show alert channel | `/set-checkin-channel` |
+| Add/remove a no-show contact | `/add-checkin-contact` · `/remove-checkin-contact` |
 | See all commands | `/help` |
