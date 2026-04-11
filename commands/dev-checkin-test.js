@@ -21,27 +21,43 @@ module.exports = {
     .setName('dev-checkin-test')
     .setDescription('[DEV] Seed a test check-in record and send the DM button')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addStringOption(opt =>
-      opt.setName('show')
-        .setDescription('Which show to test')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Great Gold Bird', value: 'GGB'      },
-          { name: 'Lucidity',        value: 'Lucidity' },
-          { name: 'The Endings',     value: 'Endings'  },
+    .addSubcommand(sub =>
+      sub.setName('seed')
+        .setDescription('Seed a record and send the DM button')
+        .addStringOption(opt =>
+          opt.setName('show')
+            .setDescription('Which show to test')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Great Gold Bird', value: 'GGB'      },
+              { name: 'Lucidity',        value: 'Lucidity' },
+              { name: 'The Endings',     value: 'Endings'  },
+            )
+        )
+        .addUserOption(opt =>
+          opt.setName('user')
+            .setDescription('User to send the test DM to (defaults to you)')
+            .setRequired(false)
         )
     )
-    .addUserOption(opt =>
-      opt.setName('user')
-        .setDescription('User to send the test DM to (defaults to you)')
-        .setRequired(false)
+    .addSubcommand(sub =>
+      sub.setName('clear')
+        .setDescription('Delete all check-in records for today')
     ),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    if (interaction.options.getSubcommand() === 'clear') {
+      const today   = utils.todayCentral();
+      const result  = db.db.prepare('DELETE FROM checkin_records WHERE shift_date = ?').run(today);
+      await interaction.editReply({ content: `🗑️ Deleted ${result.changes} check-in record(s) for ${today}.` });
+      return;
+    }
+
     const show   = interaction.options.getString('show');
     const target = interaction.options.getUser('user') ?? interaction.user;
+
     const today  = utils.todayCentral();
 
     // Resolve bookeo_name — use linked name if available, fall back to Discord username
