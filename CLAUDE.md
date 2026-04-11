@@ -48,6 +48,7 @@ Discord slash command
       → lib/shows.js       (show config: emojis, role mappings, tracker format)
       → lib/rsvp.js        (live RSVP tracker for both meeting and custom game posts)
       → lib/utils.js       (time/date parsing, recurrence logic, timezone helpers)
+      → lib/checkin.js     (check-in seeding, alert scheduling, late check-in edits)
   → lib/scheduler.js       (node-cron jobs, started from index.js on ClientReady)
 ```
 
@@ -137,6 +138,36 @@ The Game ID is embedded in the post itself so it's always visible even if the ep
 `/cancel-custom-game` **deletes** the original post (via `message.delete()`), then marks the game as filled in the DB.
 
 The 48h unfilled reminder (run at 8am if created_at ≤ 48h ago) fetches the post's ✅ reactors and checks which Discord roles are covered. For multi-role shows (MFB, Endings), it pings only the specific missing role(s) by Discord role mention (`<@&ROLE_ID>`). Falls back to `@here` if the message can't be fetched or for single-role shows.
+
+### Check-in system
+
+**Config lives in `lib/shows.js`** — each eligible show has an optional `checkin` block:
+```js
+checkin: { roles: ['Mikey'], callTimeOffset: -30 }
+```
+- `roles` — which display role names are required to check in (matched against the cast member's role via `getShowRole`)
+- `callTimeOffset` — minutes relative to show time (negative = before). Currently -30 for all eligible shows
+- MFB has no `checkin` block — it is excluded entirely (multi-person show, shared call time makes individual check-in impractical)
+- Author (The Endings) is excluded because they are not in `checkin.roles`, only HR is. The exclusion is role-based, not show-based.
+
+**`seedTodayCheckins(client)` flow** (runs on `ClientReady`):
+1. Fetches today's Bookeo shifts via `lib/bookeo.js`
+2. Calls `groupEligibleShifts(shifts)` — deduplicates consecutive shifts for the same (castName, show, date), keeping the earliest start time to avoid double-alerting
+3. For each eligible shift, upserts a row into `checkin_records` (columns: `id`, `shift_date`, `show`, `bookeo_name`, `discord_id`, `call_time` unix seconds, `checked_in_at`, `alert_message_id`, `alert_channel_id`, `forced_by`)
+4. Calls `scheduleCheckinAlert(client, rec)` for each newly seeded record
+
+**Alert scheduling chain:**
+- `scheduleCheckinAlert(client, rec)` — computes delay from now to `rec.call_time`. If delay > 0, sets a `setTimeout`. If call time is within the 5-minute grace window (passed but ≤ 5 min ago), fires immediately. If beyond 5 min, logs and skips (prevents stale alerts from piling up on redeploy)
+- `fireCheckinAlert(client, rec)` — posts the no-show alert to the show's configured channel (`checkin_alert_channel_{SHOW}` key in `bot_config`). Pings all contacts from the `checkin_contacts` JSON array in `bot_config` plus the cast member themselves. Stores `alert_message_id` and `alert_channel_id` on the record
+- `editAlertForLateCheckin(client, rec, forcedById)` — fetches the stored alert message and edits it to append "✅ [FirstName] checked in at H:MM CT" (normal late check-in) or "Manually confirmed by @Admin at H:MM CT" (forced via `/force-checkin`)
+
+**Startup recovery:** after `seedTodayCheckins` completes, the bot also queries `checkin_records` for any pre-existing pending records (checked_in_at IS NULL, no alert yet fired, shift_date = today) and calls `scheduleCheckinAlert` on each. This handles Railway redeploys mid-day without losing scheduled alerts.
+
+**`bot_config` keys used by check-in:**
+- `checkin_alert_channel_{SHOW}` (e.g. `checkin_alert_channel_GGB`) — Discord channel ID for no-show alerts, set via `/set-checkin-channel`
+- `checkin_contacts` — JSON-serialized array of Discord user IDs to ping on no-show alerts, managed via `/add-checkin-contact` and `/remove-checkin-contact`
+
+**One-time setup required:** `/set-checkin-channel` for each show (GGB, Lucidity, Endings) and `/add-checkin-contact` for each notification contact. Cast members must also be linked via `/link-member` (already required for shift DMs) — unlinked cast are skipped at seed time.
 
 ### Show abbreviations
 

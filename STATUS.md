@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-11
 
 ---
 
@@ -124,6 +124,25 @@ The Game ID is embedded in the post itself (not just the ephemeral reply) so it'
 
 MFB custom server emojis: `:Dno:` `:Hno:` `:Dmaybe:` `:Hmaybe:` — **names are case-sensitive**, must match exactly in Discord server settings.
 
+### Check-in system
+Cast members on eligible shows receive a green "Check in: [Show Name]" button in their daily 9am shift DM. They can also run `/check-in` directly at any time on the day of a show.
+
+**Eligible shows and roles:**
+- Great Gold Bird — Mikey (call time: 30 min before show)
+- Lucidity — Riley (call time: 30 min before show)
+- The Endings — HR only (Author is excluded from check-in)
+- MFB — not eligible (multi-person show with shared call time)
+
+**Flow:**
+1. On startup, bot fetches today's Bookeo shifts, seeds `checkin_records` for eligible cast, and schedules a `setTimeout` per record firing at call time
+2. Cast member clicks the button in their DM or runs `/check-in`; button is disabled with "✅ Checked in at H:MM CT"
+3. If call time arrives with no check-in, bot posts a no-show alert to the show's configured channel, pinging all contacts and the cast member themselves
+4. Late check-in or `/force-checkin` by an admin edits the alert message to append the confirmation with timestamp
+
+**Startup recovery:** on `ClientReady`, after seeding today's records, the bot also reschedules alerts for any pre-existing pending records (handles Railway redeploys). Grace window: if call time passed within 5 minutes of restart, the alert fires immediately; beyond 5 minutes, it is skipped with a console log.
+
+**Admin commands:** `/force-checkin`, `/set-checkin-channel`, `/add-checkin-contact`, `/remove-checkin-contact`, `/list-checkin-contacts`, `/dev-checkin-test` (seed/clear)
+
 ### Misc
 - `/help` — ephemeral command list, available to all members
 - All date displays include the year: "Monday, April 20, 2026"
@@ -170,3 +189,5 @@ To add a new show: update `SHOW_FULL_NAMES` in `lib/bookeo.js` AND `SHOW_GROUPS`
 - **MFB custom emojis** — verify `:Dno:` `:Hno:` `:Dmaybe:` `:Hmaybe:` exist in the Discord server with exactly those names (capital first letter)
 - **Lucidity** — not yet in Bookeo (show not open); shift DMs won't fire until added to bookeo-asst's `SHOW_GROUPS`
 - **`/schedule` and `/member-schedule`** — depend on bookeo-asst `/api/schedule` being live; verify with J Cameron Cooper
+- **Check-in alert channels** — run `/set-checkin-channel` for each eligible show (GGB, Lucidity, Endings) so no-show alerts have a destination channel
+- **Check-in contacts** — run `/add-checkin-contact` for each person who should be pinged on no-show alerts
