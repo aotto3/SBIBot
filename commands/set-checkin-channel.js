@@ -1,11 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../lib/db');
-
-const SHOW_LABELS = {
-  GGB:      'Great Gold Bird',
-  Lucidity: 'Lucidity',
-  Endings:  'The Endings',
-};
+const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,11 +11,7 @@ module.exports = {
       opt.setName('show')
         .setDescription('Which show to configure')
         .setRequired(true)
-        .addChoices(
-          { name: 'Great Gold Bird', value: 'GGB'      },
-          { name: 'Lucidity',        value: 'Lucidity' },
-          { name: 'The Endings',     value: 'Endings'  },
-        )
+        .addChoices(...CHECKIN_SHOW_CHOICES)
     )
     .addChannelOption(opt =>
       opt.setName('channel')
@@ -37,7 +28,7 @@ module.exports = {
     db.setConfig(`checkin_alert_channel_${show}`, channel.id);
 
     await interaction.editReply({
-      content: `✅ Check-in alert channel for **${SHOW_LABELS[show]}** set to <#${channel.id}>.`,
+      content: `✅ Check-in alert channel for **${showLabel(show)}** set to <#${channel.id}>.`,
     });
   },
 };

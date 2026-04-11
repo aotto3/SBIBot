@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ChannelType, MessageFlags } = require('discord.js');
 const db                    = require('../lib/db');
 const utils                 = require('../lib/utils');
-const { SHOWS, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
+const { SHOWS, SHOW_CHOICES, showLabel, showRoleGroups, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,12 +12,7 @@ module.exports = {
       opt.setName('show')
         .setDescription('Which show?')
         .setRequired(true)
-        .addChoices(
-          { name: 'Man From Beyond', value: 'MFB'      },
-          { name: 'The Endings',     value: 'Endings'  },
-          { name: 'Great Gold Bird', value: 'GGB'      },
-          { name: 'Lucidity',        value: 'Lucidity' },
-        )
+        .addChoices(...SHOW_CHOICES)
     )
     .addStringOption(opt =>
       opt.setName('date')
@@ -58,7 +53,6 @@ module.exports = {
       }
     }
 
-    const config = SHOWS[showKey];
     const emojis = allEmojisForShow(showKey);
 
     const [y, mo, d]  = parsedDate.split('-').map(Number);
@@ -78,14 +72,14 @@ module.exports = {
 
     // ── Build post content ────────────────────────────────────────────────────
     const lines = [
-      `**${config.label}**`,
+      `**${showLabel(showKey)}**`,
       `Custom Game Request`,
       `@here Is anyone available on ${dateTimeDisplay}?`,
     ];
 
     // React prompt: skip for MFB (role-grouped emojis speak for themselves)
-    if (!config.roleGroups) {
-      const promptLines = buildPromptLines(config, guild);
+    if (!showRoleGroups(showKey)) {
+      const promptLines = buildPromptLines(SHOWS[showKey], guild);
       lines.push('', ...promptLines);
     }
 
@@ -109,7 +103,7 @@ module.exports = {
 
     db.setCustomGameMessageId(id, msg.id);
 
-    await interaction.editReply(`✅ Posted availability check for **${config.label}** on ${dateTimeDisplay} in <#${channel.id}>. (Game ID: \`${id}\`)`);
+    await interaction.editReply(`✅ Posted availability check for **${showLabel(showKey)}** on ${dateTimeDisplay} in <#${channel.id}>. (Game ID: \`${id}\`)`);
   },
 };
 

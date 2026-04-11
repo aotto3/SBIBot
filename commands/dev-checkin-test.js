@@ -14,7 +14,7 @@ const {
 } = require('discord.js');
 const db    = require('../lib/db');
 const utils = require('../lib/utils');
-const { SHOWS } = require('../lib/shows');
+const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
 const { scheduleCheckinAlert } = require('../lib/checkin');
 
 module.exports = {
@@ -29,11 +29,7 @@ module.exports = {
           opt.setName('show')
             .setDescription('Which show to test')
             .setRequired(true)
-            .addChoices(
-              { name: 'Great Gold Bird', value: 'GGB'      },
-              { name: 'Lucidity',        value: 'Lucidity' },
-              { name: 'The Endings',     value: 'Endings'  },
-            )
+            .addChoices(...CHECKIN_SHOW_CHOICES)
         )
         .addUserOption(opt =>
           opt.setName('user')
@@ -88,7 +84,7 @@ module.exports = {
     scheduleCheckinAlert(interaction.client, rec);
 
     // Send the DM
-    const showLabel = SHOWS[show].label;
+    const showLabel = showLabel(show);
     const btn = new ButtonBuilder()
       .setCustomId(`checkin:${show}:${today}`)
       .setLabel(`Check in: ${showLabel}`)
