@@ -14,7 +14,7 @@ const {
 const { handleReactionChange } = require('./lib/rsvp');
 const db   = require('./lib/db');
 const { SHOWS } = require('./lib/shows');
-const { seedTodayCheckins, scheduleCheckinAlert } = require('./lib/checkin');
+const { seedTodayCheckins, scheduleCheckinAlert, editAlertForLateCheckin } = require('./lib/checkin');
 const utils = require('./lib/utils');
 const fs   = require('fs');
 const path = require('path');
@@ -111,6 +111,9 @@ async function handleCheckinButton(interaction) {
 
   db.markCheckedIn(rec.id);
 
+  const fresh = db.getCheckinRecordById(rec.id);
+  await editAlertForLateCheckin(interaction.client, fresh);
+
   const timeStr = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
     hour: 'numeric', minute: '2-digit', hour12: true,
@@ -152,6 +155,8 @@ async function handleCheckinSelect(interaction) {
   }
 
   db.markCheckedIn(rec.id);
+  const freshSelect = db.getCheckinRecordById(rec.id);
+  await editAlertForLateCheckin(interaction.client, freshSelect);
   await interaction.update({
     content: `✅ Checked in for **${SHOWS[show].label}** today.`,
     components: [],
