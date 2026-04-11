@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('disc
 const db     = require('../lib/db');
 const utils  = require('../lib/utils');
 const bookeo = require('../lib/bookeo');
+const { showLabel } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -81,7 +82,7 @@ module.exports = {
     for (const shift of memberShifts) {
       const [dy, dmo, dd] = shift.date.split('-').map(Number);
       const dateDisplay   = utils.formatMeetingDate(new Date(dy, dmo - 1, dd));
-      const showName      = bookeo.showFullName(shift.show);
+      const showName      = showLabel(shift.show);
       lines.push(`  • ${showName} — ${dateDisplay} at ${shift.time} (${shift.guest_count} guests)`);
     }
 

@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const utils  = require('../lib/utils');
 const bookeo = require('../lib/bookeo');
+const { showLabel } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -62,7 +63,7 @@ module.exports = {
 
       for (const shift of byDate[date]) {
         const cast     = shift.cast.length ? shift.cast.join(', ') : '_no cast assigned_';
-        const showName = bookeo.showFullName(shift.show);
+        const showName = showLabel(shift.show);
         lines.push(`  • ${showName} — ${shift.time} | Cast: ${cast} | Guests: ${shift.guest_count}`);
       }
       lines.push('');

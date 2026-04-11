@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db    = require('../lib/db');
 const utils = require('../lib/utils');
-const { SHOWS } = require('../lib/shows');
+const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
 const { editAlertForLateCheckin } = require('../lib/checkin');
 
 module.exports = {
@@ -18,11 +18,7 @@ module.exports = {
       opt.setName('show')
         .setDescription('Which show (required if they have multiple shifts today)')
         .setRequired(false)
-        .addChoices(
-          { name: 'Great Gold Bird', value: 'GGB'      },
-          { name: 'Lucidity',        value: 'Lucidity' },
-          { name: 'The Endings',     value: 'Endings'  },
-        )
+        .addChoices(...CHECKIN_SHOW_CHOICES)
     ),
 
   async execute(interaction) {
@@ -51,7 +47,7 @@ module.exports = {
       rec = pending.find(r => r.show === show);
       if (!rec) {
         await interaction.editReply({
-          content: `No pending check-in record found for <@${target.id}> / **${SHOWS[show].label}** today.`,
+          content: `No pending check-in record found for <@${target.id}> / **${showLabel(show)}** today.`,
         });
         return;
       }
@@ -70,7 +66,7 @@ module.exports = {
     await editAlertForLateCheckin(interaction.client, fresh, interaction.user.id);
 
     await interaction.editReply({
-      content: `✅ <@${target.id}> manually confirmed as checked in for **${SHOWS[rec.show].label}** today.`,
+      content: `✅ <@${target.id}> manually confirmed as checked in for **${showLabel(rec.show)}** today.`,
     });
 
     console.log(`[checkin] ${interaction.user.tag} force-checked-in ${target.tag} for ${rec.show} on ${today}`);
