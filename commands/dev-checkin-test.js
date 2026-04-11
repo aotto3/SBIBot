@@ -84,13 +84,13 @@ module.exports = {
     checkin.scheduleCheckinAlert(rec);
 
     // Send the DM
-    const showLabel = showLabel(show);
+    const showName = showLabel(show);
     const btn = new ButtonBuilder()
       .setCustomId(`checkin:${show}:${today}`)
-      .setLabel(`Check in: ${showLabel}`)
+      .setLabel(`Check in: ${showName}`)
       .setStyle(ButtonStyle.Success);
 
-    const dmContent = `🧪 **[Test DM]** You have a check-in for **${showLabel}** today.\nTap the button below when you're on location.`;
+    const dmContent = `🧪 **[Test DM]** You have a check-in for **${showName}** today.\nTap the button below when you're on location.`;
 
     try {
       const user = await interaction.client.users.fetch(target.id);
@@ -106,7 +106,7 @@ module.exports = {
     }
 
     await interaction.editReply({
-      content: `✅ Seeded check-in record and sent test DM to <@${target.id}> for **${showLabel}** (${today}).\n\nYou can also test \`/check-in\` from the server.`,
+      content: `✅ Seeded check-in record and sent test DM to <@${target.id}> for **${showName}** (${today}).\n\nYou can also test \`/check-in\` from the server.`,
     });
   },
 };
