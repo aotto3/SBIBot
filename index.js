@@ -14,6 +14,8 @@ const {
 const { handleReactionChange } = require('./lib/rsvp');
 const db   = require('./lib/db');
 const { SHOWS } = require('./lib/shows');
+const { seedTodayCheckins, scheduleCheckinAlert } = require('./lib/checkin');
+const utils = require('./lib/utils');
 const fs   = require('fs');
 const path = require('path');
 
@@ -44,9 +46,32 @@ for (const file of fs.readdirSync(commandsDir).filter(f => f.endsWith('.js'))) {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
-client.once(Events.ClientReady, c => {
+client.once(Events.ClientReady, async c => {
   console.log(`Logged in as ${c.user.tag}`);
   require('./lib/scheduler').start(client);
+
+  // ── Check-in seeding & startup recovery ────────────────────────────────────
+  // Seed today's check-in records from Bookeo, then schedule alerts.
+  // Also reschedules any pending alerts that were lost during a redeploy.
+  try {
+    await seedTodayCheckins(client);
+  } catch (err) {
+    console.error('[checkin] seedTodayCheckins failed on startup:', err);
+  }
+
+  // Recovery: reschedule alerts for any records that were pending before
+  // seedTodayCheckins ran (i.e. seeded in a previous boot, not yet checked in).
+  // seedTodayCheckins already scheduled newly-upserted records; this catches
+  // records that pre-existed (INSERT OR IGNORE skipped them, so scheduleCheckinAlert
+  // wasn't called for them above).
+  const today   = utils.todayCentral();
+  const pending = db.getPendingCheckins(today);
+  for (const rec of pending) {
+    scheduleCheckinAlert(client, rec);
+  }
+  if (pending.length) {
+    console.log(`[checkin] Recovery: rescheduled ${pending.length} pending alert(s) from previous boot`);
+  }
 });
 
 // ─── RSVP reaction tracker ────────────────────────────────────────────────────
