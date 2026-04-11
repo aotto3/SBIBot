@@ -5,9 +5,9 @@ const {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } = require('discord.js');
-const db    = require('../lib/db');
-const utils = require('../lib/utils');
-const { SHOWS } = require('../lib/shows');
+const checkin = require('../lib/checkin');
+const utils   = require('../lib/utils');
+const { showLabel } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,13 +17,12 @@ module.exports = {
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const today   = utils.todayCentral();
-    const pending = db.getPendingCheckinsByDiscord(interaction.user.id, today);
+    const today               = utils.todayCentral();
+    const { pending, all }    = checkin.queryCheckins(interaction.user.id, today);
 
     if (!pending.length) {
       // Distinguish "already checked in today" from "no shift today"
-      const allToday = db.getCheckinRecordsByDiscordAndDate(interaction.user.id, today);
-      if (allToday.some(r => r.checked_in_at)) {
+      if (all.some(r => r.checked_in_at)) {
         await interaction.editReply({ content: 'You have already checked in for today.' });
       } else {
         await interaction.editReply({ content: 'You have no check-in required for today.' });
@@ -33,9 +32,9 @@ module.exports = {
 
     if (pending.length === 1) {
       const rec = pending[0];
-      db.markCheckedIn(rec.id);
+      await checkin.performCheckin(rec.id);
       await interaction.editReply({
-        content: `✅ Checked in for **${SHOWS[rec.show].label}** today.`,
+        content: `✅ Checked in for **${showLabel(rec.show)}** today.`,
       });
       return;
     }
@@ -47,7 +46,7 @@ module.exports = {
       .addOptions(
         pending.map(rec =>
           new StringSelectMenuOptionBuilder()
-            .setLabel(SHOWS[rec.show].label)
+            .setLabel(showLabel(rec.show))
             .setValue(rec.show)
         )
       );

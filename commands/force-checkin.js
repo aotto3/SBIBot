@@ -1,8 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db    = require('../lib/db');
-const utils = require('../lib/utils');
-const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
-const { editAlertForLateCheckin } = require('../lib/checkin');
+const checkin = require('../lib/checkin');
+const utils   = require('../lib/utils');
+const { CHECKIN_SHOW_CHOICES, showLabel, SHOWS } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -28,9 +27,7 @@ module.exports = {
     const show    = interaction.options.getString('show');
     const today   = utils.todayCentral();
 
-    // Find candidate records — all today's records for this user, not yet checked in
-    const allToday = db.getCheckinRecordsByDiscordAndDate(target.id, today);
-    const pending  = allToday.filter(r => !r.checked_in_at);
+    const { pending, all: allToday } = checkin.queryCheckins(target.id, today);
 
     if (!pending.length) {
       const alreadyIn = allToday.some(r => r.checked_in_at);
@@ -61,9 +58,7 @@ module.exports = {
       return;
     }
 
-    db.markCheckedIn(rec.id, interaction.user.id);
-    const fresh = db.getCheckinRecordById(rec.id);
-    await editAlertForLateCheckin(interaction.client, fresh, interaction.user.id);
+    await checkin.performCheckin(rec.id, { forcedBy: interaction.user.id });
 
     await interaction.editReply({
       content: `✅ <@${target.id}> manually confirmed as checked in for **${showLabel(rec.show)}** today.`,
