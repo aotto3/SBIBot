@@ -16,6 +16,7 @@ const db      = require('./lib/db');
 const checkin = require('./lib/checkin');
 const { showLabel } = require('./lib/shows');
 const utils   = require('./lib/utils');
+const { handleCoverageRequestModal } = require('./commands/coverage-request');
 const fs   = require('fs');
 const path = require('path');
 
@@ -156,6 +157,12 @@ client.on(Events.InteractionCreate, async interaction => {
   // Check-in select menu (from /check-in command)
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checkin_select:')) {
     try { await handleCheckinSelect(interaction); } catch (err) { console.error('[checkin] Select handler error:', err); }
+    return;
+  }
+
+  // Coverage request modal submit
+  if (interaction.isModalSubmit() && interaction.customId.startsWith('coverage_request_modal:')) {
+    try { await handleCoverageRequestModal(interaction); } catch (err) { console.error('[coverage] Modal handler error:', err); }
     return;
   }
 
