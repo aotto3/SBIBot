@@ -57,6 +57,25 @@ test('parseShiftInput — no valid dates returns empty array', () => {
   assert.deepEqual(result, []);
 });
 
+test('parseShiftInput — ambiguous hour defaults to PM', () => {
+  // "7" with no AM/PM should become 19:00, not 07:00
+  const result = parseShiftInput('January 15, 2026 at 7', REF);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '19:00');
+});
+
+test('parseShiftInput — ambiguous 5:30 defaults to PM', () => {
+  const result = parseShiftInput('January 15, 2026 at 5:30', REF);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '17:30');
+});
+
+test('parseShiftInput — explicit AM is preserved', () => {
+  const result = parseShiftInput('January 15, 2026 at 9am', REF);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '09:00');
+});
+
 test('parseShiftInput — date without time returns null time', () => {
   const result = parseShiftInput('January 15, 2026', REF);
   assert.equal(result.length, 1);

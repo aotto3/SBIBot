@@ -85,15 +85,24 @@ async function handleCoverageRequestModal(interaction) {
   }
 
   // 3. Duplicate check — any parsed shift already has an open request?
-  const duplicates = parsedShifts.filter(s =>
-    db.getOpenShiftByShowAndDateTime(show, s.date, s.time)
-  );
-  if (duplicates.length) {
-    const dupList = duplicates
-      .map(s => `**${utils.formatMeetingDate(new Date(...s.date.split('-').map(Number).map((v,i) => i === 1 ? v - 1 : v)))} at ${utils.formatTime(s.time)}**`)
-      .join('\n');
+  const dupMatches = parsedShifts
+    .map(s => ({ shift: s, existing: db.getOpenShiftByShowAndDateTime(show, s.date, s.time) }))
+    .filter(({ existing }) => existing);
+
+  if (dupMatches.length) {
+    const dupList = dupMatches.map(({ shift, existing }) => {
+      const [y, mo, d] = shift.date.split('-').map(Number);
+      const dateStr = utils.formatMeetingDate(new Date(y, mo - 1, d));
+      const timeStr = utils.formatTime(shift.time);
+      let line = `**${dateStr} at ${timeStr}**`;
+      if (existing.shift_message_id && existing.channel_id) {
+        const link = `https://discord.com/channels/${interaction.guildId}/${existing.channel_id}/${existing.shift_message_id}`;
+        line += ` — [view post](${link})`;
+      }
+      return line;
+    }).join('\n');
     await interaction.editReply({
-      content: `❌ An open coverage request already exists for:\n${dupList}\n\nPlease check the coverage channel before submitting again.`,
+      content: `❌ An open coverage request already exists for:\n${dupList}\n\nPlease check the coverage post before submitting again.`,
     });
     return;
   }
