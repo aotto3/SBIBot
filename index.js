@@ -64,6 +64,37 @@ client.once(Events.ClientReady, async c => {
   require('./lib/scheduler').start(client);
 });
 
+// ─── DM forwarding ───────────────────────────────────────────────────────────
+// Forward any DM received by the bot to Allen so cast member questions don't
+// go unnoticed. Allen's ID is hardcoded — change here if ownership transfers.
+
+const ALLEN_DISCORD_ID = '302924689704222723';
+
+client.on(Events.MessageCreate, async message => {
+  // Only handle DMs, not guild messages
+  if (!message.channel.isDMBased()) return;
+  // Ignore the bot's own messages and Allen DMing the bot directly
+  if (message.author.bot) return;
+  if (message.author.id === ALLEN_DISCORD_ID) return;
+
+  const timeStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'long', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(message.createdAt) + ' CT';
+
+  const body    = message.content || '_(no text — may contain an attachment)_';
+  const forward = `📩 DM from **${message.author.displayName}** (@${message.author.username})\n${timeStr}\n\n"${body}"`;
+
+  try {
+    const allen = await client.users.fetch(ALLEN_DISCORD_ID);
+    await allen.send(forward);
+    console.log(`[dm-forward] Forwarded DM from ${message.author.username} to Allen`);
+  } catch (err) {
+    console.error('[dm-forward] Failed to forward DM:', err.message);
+  }
+});
+
 // ─── RSVP reaction tracker ────────────────────────────────────────────────────
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
