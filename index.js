@@ -94,6 +94,16 @@ client.once(Events.ClientReady, async c => {
   await _trySeed(seedDate, 1);
 
   require('./lib/scheduler').start(client);
+
+  // ── Startup notification ────────────────────────────────────────────────────
+  // DMs Allen when the bot comes online — confirms the bot→Allen DM channel
+  // works and gives a visible signal that the latest code is running.
+  try {
+    const allen = await client.users.fetch(ALLEN_DISCORD_ID);
+    await allen.send(`✅ SBI Bot is online (${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', hour12: true })} CT)`);
+  } catch (err) {
+    console.error('[startup] Failed to DM Allen:', err.message);
+  }
 });
 
 // ─── DM forwarding ───────────────────────────────────────────────────────────
