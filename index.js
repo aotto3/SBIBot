@@ -71,6 +71,7 @@ client.once(Events.ClientReady, async c => {
 const ALLEN_DISCORD_ID = '302924689704222723';
 
 client.on(Events.MessageCreate, async message => {
+  console.log(`[dm-forward] MessageCreate: author=${message.author?.username} isDM=${message.channel.isDMBased()} isBot=${message.author?.bot}`);
   // Only handle DMs, not guild messages
   if (!message.channel.isDMBased()) return;
   // Ignore the bot's own messages and Allen DMing the bot directly
