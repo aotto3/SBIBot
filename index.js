@@ -49,15 +49,19 @@ for (const file of fs.readdirSync(commandsDir).filter(f => f.endsWith('.js'))) {
 
 client.once(Events.ClientReady, async c => {
   console.log(`Logged in as ${c.user.tag}`);
-  require('./lib/scheduler').start(client);
 
   // ── Check-in seeding & startup recovery ────────────────────────────────────
+  // Seed first so check-in records exist before the 9am shift DM cron fires.
+  // Starting the scheduler before seeding completes causes a race where the
+  // DM job queries pending records before they've been inserted.
   checkin.init(client);
   try {
     await checkin.seedAndScheduleToday();
   } catch (err) {
     console.error('[checkin] seedAndScheduleToday failed on startup:', err);
   }
+
+  require('./lib/scheduler').start(client);
 });
 
 // ─── RSVP reaction tracker ────────────────────────────────────────────────────
