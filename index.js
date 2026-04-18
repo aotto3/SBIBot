@@ -47,6 +47,40 @@ for (const file of fs.readdirSync(commandsDir).filter(f => f.endsWith('.js'))) {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
+// Attempt seeding with a 20s timeout. On failure, retry every 5 minutes for up
+// to 1 hour. Background retries fire after the scheduler is already running so
+// they don't block anything. Stops retrying if the date rolls over (no point
+// seeding yesterday's records).
+const SEED_TIMEOUT_MS  = 20_000;
+const SEED_RETRY_MS    = 5 * 60 * 1000;
+const SEED_MAX_RETRIES = 12; // 12 × 5min = 1 hour
+
+async function _trySeed(seedDate, attempt) {
+  try {
+    await Promise.race([
+      checkin.seedAndScheduleToday(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timed out after 20s')), SEED_TIMEOUT_MS)
+      ),
+    ]);
+    const suffix = attempt > 1 ? ` (succeeded on attempt ${attempt})` : '';
+    console.log(`[checkin] Seeding complete${suffix}`);
+  } catch (err) {
+    console.error(`[checkin] Seeding attempt ${attempt} failed: ${err.message}`);
+    if (attempt >= SEED_MAX_RETRIES) {
+      console.error('[checkin] Seeding exhausted all retries — check bookeo-asst');
+      return;
+    }
+    const utils = require('./lib/utils');
+    if (utils.todayCentral() !== seedDate) {
+      console.log('[checkin] Date rolled over during retry — skipping remaining retries');
+      return;
+    }
+    console.log(`[checkin] Retrying seeding in 5 minutes (attempt ${attempt + 1}/${SEED_MAX_RETRIES})`);
+    setTimeout(() => _trySeed(seedDate, attempt + 1), SEED_RETRY_MS);
+  }
+}
+
 client.once(Events.ClientReady, async c => {
   console.log(`Logged in as ${c.user.tag}`);
 
@@ -54,19 +88,10 @@ client.once(Events.ClientReady, async c => {
   // Seed first so check-in records exist before the 9am shift DM cron fires.
   // Starting the scheduler before seeding completes causes a race where the
   // DM job queries pending records before they've been inserted.
+  // _trySeed will retry in the background on failure without blocking startup.
   checkin.init(client);
-  try {
-    // Race seeding against a 20s wall-clock timeout so a hung Bookeo API call
-    // never prevents the scheduler from starting.
-    await Promise.race([
-      checkin.seedAndScheduleToday(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('seedAndScheduleToday timed out after 20s')), 20_000)
-      ),
-    ]);
-  } catch (err) {
-    console.error('[checkin] seedAndScheduleToday failed on startup:', err.message);
-  }
+  const seedDate = require('./lib/utils').todayCentral();
+  await _trySeed(seedDate, 1);
 
   require('./lib/scheduler').start(client);
 });
