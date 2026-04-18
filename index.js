@@ -56,9 +56,16 @@ client.once(Events.ClientReady, async c => {
   // DM job queries pending records before they've been inserted.
   checkin.init(client);
   try {
-    await checkin.seedAndScheduleToday();
+    // Race seeding against a 20s wall-clock timeout so a hung Bookeo API call
+    // never prevents the scheduler from starting.
+    await Promise.race([
+      checkin.seedAndScheduleToday(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('seedAndScheduleToday timed out after 20s')), 20_000)
+      ),
+    ]);
   } catch (err) {
-    console.error('[checkin] seedAndScheduleToday failed on startup:', err);
+    console.error('[checkin] seedAndScheduleToday failed on startup:', err.message);
   }
 
   require('./lib/scheduler').start(client);
