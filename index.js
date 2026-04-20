@@ -17,6 +17,7 @@ const checkin = require('./lib/checkin');
 const { showLabel } = require('./lib/shows');
 const utils   = require('./lib/utils');
 const { handleCoverageRequestModal } = require('./commands/coverage-request');
+const { openDMChannels } = require('./lib/dm-channels');
 const fs   = require('fs');
 const path = require('path');
 
@@ -47,39 +48,7 @@ for (const file of fs.readdirSync(commandsDir).filter(f => f.endsWith('.js'))) {
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
-// Attempt seeding with a 20s timeout. On failure, retry every 5 minutes for up
-// to 1 hour. Background retries fire after the scheduler is already running so
-// they don't block anything. Stops retrying if the date rolls over (no point
-// seeding yesterday's records).
-const SEED_TIMEOUT_MS  = 20_000;
-const SEED_RETRY_MS    = 5 * 60 * 1000;
-const SEED_MAX_RETRIES = 12; // 12 × 5min = 1 hour
-
-async function _trySeed(seedDate, attempt) {
-  try {
-    await Promise.race([
-      checkin.seedAndScheduleToday(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timed out after 20s')), SEED_TIMEOUT_MS)
-      ),
-    ]);
-    const suffix = attempt > 1 ? ` (succeeded on attempt ${attempt})` : '';
-    console.log(`[checkin] Seeding complete${suffix}`);
-  } catch (err) {
-    console.error(`[checkin] Seeding attempt ${attempt} failed: ${err.message}`);
-    if (attempt >= SEED_MAX_RETRIES) {
-      console.error('[checkin] Seeding exhausted all retries — check bookeo-asst');
-      return;
-    }
-    const utils = require('./lib/utils');
-    if (utils.todayCentral() !== seedDate) {
-      console.log('[checkin] Date rolled over during retry — skipping remaining retries');
-      return;
-    }
-    console.log(`[checkin] Retrying seeding in 5 minutes (attempt ${attempt + 1}/${SEED_MAX_RETRIES})`);
-    setTimeout(() => _trySeed(seedDate, attempt + 1), SEED_RETRY_MS);
-  }
-}
+// Retry logic lives in checkin.seedWithRetry — see lib/checkin.js.
 
 client.once(Events.ClientReady, async c => {
   console.log(`Logged in as ${c.user.tag}`);
@@ -90,9 +59,10 @@ client.once(Events.ClientReady, async c => {
   // DM job queries pending records before they've been inserted.
   // _trySeed will retry in the background on failure without blocking startup.
   checkin.init(client);
-  const seedDate = require('./lib/utils').todayCentral();
-  await _trySeed(seedDate, 1);
+  const seedDate = utils.todayCentral();
+  await checkin.seedWithRetry(seedDate, 1);
 
+  openDMChannels(client).catch(err => console.error('[dm-channels] Unexpected startup error:', err));
   require('./lib/scheduler').start(client);
 
   // ── Startup notification ────────────────────────────────────────────────────
@@ -113,9 +83,10 @@ client.once(Events.ClientReady, async c => {
 const ALLEN_DISCORD_ID = '302924689704222723';
 
 client.on(Events.MessageCreate, async message => {
-  console.log(`[dm-forward] MessageCreate: author=${message.author?.username} isDM=${message.channel.isDMBased()} isBot=${message.author?.bot}`);
   // Only handle DMs, not guild messages
   if (!message.channel.isDMBased()) return;
+  // Log all DM events (bot and human) so Railway logs can confirm receipt
+  console.log(`[dm-forward] DM received: author=${message.author.username} isBot=${message.author.bot}`);
   // Ignore the bot's own messages and Allen DMing the bot directly
   if (message.author.bot) return;
   if (message.author.id === ALLEN_DISCORD_ID) return;
