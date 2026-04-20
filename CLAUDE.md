@@ -72,6 +72,8 @@ const { Routes } = require('discord-api-types/v10');  // ← correct
 
 **Bookeo API cache**: `lib/bookeo.js` caches responses for 5 minutes in a module-level `Map` keyed on `from|to` params. Avoids redundant calls when multiple commands run close together.
 
+**Bookeo API timeout**: `lib/bookeo.js` sets a 15-second timeout on all `axios.get` calls. If bookeo-asst is slow or down, the call fails fast rather than hanging indefinitely.
+
 **bookeo-asst ignores the `to` query parameter** — it always returns a full week of shifts regardless of what `to` is set to. Both `runShiftDMs` in `lib/scheduler.js` and `/send-shift-reminders` filter results client-side after the API call: `shifts.filter(s => s.date >= from && s.date <= to)`. Do not remove this filter — without it, cast members receive DMs for shifts outside the intended window.
 
 ### Meeting reminders
@@ -150,18 +152,24 @@ checkin: { roles: ['Mikey'], callTimeOffset: -30 }
 - MFB has no `checkin` block — it is excluded entirely (multi-person show, shared call time makes individual check-in impractical)
 - Author (The Endings) is excluded because they are not in `checkin.roles`, only HR is. The exclusion is role-based, not show-based.
 
-**`seedTodayCheckins(client)` flow** (runs on `ClientReady`):
-1. Fetches today's Bookeo shifts via `lib/bookeo.js`
+**`seedAndScheduleToday()` flow** (runs on `ClientReady` via `_trySeed`):
+1. Fetches today's Bookeo shifts via `lib/bookeo.js` (15s axios timeout)
 2. Calls `groupEligibleShifts(shifts)` — deduplicates consecutive shifts for the same (castName, show, date), keeping the earliest start time to avoid double-alerting
 3. For each eligible shift, upserts a row into `checkin_records` (columns: `id`, `shift_date`, `show`, `bookeo_name`, `discord_id`, `call_time` unix seconds, `checked_in_at`, `alert_message_id`, `alert_channel_id`, `forced_by`)
-4. Calls `scheduleCheckinAlert(client, rec)` for each newly seeded record
+4. Schedules alerts for all pending records (newly seeded + pre-existing from prior boot)
+
+**Startup seeding order matters**: `scheduler.start()` is called **after** `seedAndScheduleToday()` completes. This prevents a race where the 9am shift DM cron fires before check-in records are inserted, causing cast members to receive DMs without check-in buttons.
+
+**Bookeo down at startup — `_trySeed` retry logic**: seeding is wrapped in a 20-second `Promise.race` timeout. If Bookeo is unreachable, the bot proceeds (scheduler starts) and retries seeding every 5 minutes for up to 1 hour (12 attempts). Retries stop early if the date rolls over. Implemented in `index.js` as `_trySeed(seedDate, attempt)`.
 
 **Alert scheduling chain:**
-- `scheduleCheckinAlert(client, rec)` — computes delay from now to `rec.call_time`. If delay > 0, sets a `setTimeout`. If call time is within the 5-minute grace window (passed but ≤ 5 min ago), fires immediately. If beyond 5 min, logs and skips (prevents stale alerts from piling up on redeploy)
-- `fireCheckinAlert(client, rec)` — posts the no-show alert to the show's configured channel (`checkin_alert_channel_{SHOW}` key in `bot_config`). Pings all contacts from the `checkin_contacts` JSON array in `bot_config` plus the cast member themselves. Stores `alert_message_id` and `alert_channel_id` on the record
-- `editAlertForLateCheckin(client, rec, forcedById)` — fetches the stored alert message and edits it to append "✅ [FirstName] checked in at H:MM CT" (normal late check-in) or "Manually confirmed by @Admin at H:MM CT" (forced via `/force-checkin`)
+- `_scheduleCheckinAlert(rec)` — computes delay from now to `rec.call_time`. If delay > 0, sets a `setTimeout`. If call time has already passed (any amount), fires immediately — there is **no grace window**. The `alert_message_id IS NULL` check in `getPendingCheckins` prevents double-firing on redeploy.
+- `_fireCheckinAlert(rec)` — re-fetches the record first (suppresses if already checked in), then posts the no-show alert to the show's configured channel (`checkin_alert_channel_{SHOW}` key in `bot_config`). Pings all contacts from the `checkin_contacts` JSON array in `bot_config` plus the cast member themselves. Stores `alert_message_id` and `alert_channel_id` on the record.
+- `_editAlertForLateCheckin(rec, forcedById)` — fetches the stored alert message and edits it to append "✅ [FirstName] checked in at H:MM CT" (normal late check-in) or "Manually confirmed by @Admin at H:MM CT" (forced via `/force-checkin`)
 
-**Startup recovery:** after `seedTodayCheckins` completes, the bot also queries `checkin_records` for any pre-existing pending records (checked_in_at IS NULL, no alert yet fired, shift_date = today) and calls `scheduleCheckinAlert` on each. This handles Railway redeploys mid-day without losing scheduled alerts.
+**Startup recovery:** after seeding, the bot queries `checkin_records` for any pre-existing pending records (checked_in_at IS NULL, alert_message_id IS NULL, shift_date = today) and calls `_scheduleCheckinAlert` on each. Because there is no grace window, any past-call-time records that never fired (e.g. bot was down) will alert immediately on startup.
+
+**Check-in logging**: seeding emits `=== SEEDING START ===` / `=== SEEDING DONE ===` bracket logs with elapsed time. Each cast member logs either `SEED` (with computed call time) or `SKIP` (with reason: missing link, ineligible role). The shift DM job logs whether each cast member received a check-in button or not, and its start time in CT.
 
 **`bot_config` keys used by check-in:**
 - `checkin_alert_channel_{SHOW}` (e.g. `checkin_alert_channel_GGB`) — Discord channel ID for no-show alerts, set via `/set-checkin-channel`
@@ -178,6 +186,28 @@ checkin: { roles: ['Mikey'], callTimeOffset: -30 }
 - `Lucidity` → Lucidity
 
 To add a new show, update `SHOW_FULL_NAMES` in `lib/bookeo.js` AND the `SHOW_GROUPS` dict in bookeo-asst's `upcoming.py`.
+
+### `/checkin-status` command
+
+`/checkin-status` (ManageGuild only) shows the last 3 days of check-in records grouped by date and show. Each record displays the cast member's name, computed call time, and one of four states:
+- ✅ checked in at H:MM CT (with `(late)` or `(forced)` tags as applicable)
+- ⚠️ alert fired, not checked in
+- 🔴 MISSED — call time passed, no alert fired (indicates a bug)
+- ⏳ pending — call time not yet reached
+
+Uses `db.getCheckinRecordsByDateRange(fromDate, toDate)` added to `lib/db.js`.
+
+### DM forwarding
+
+Any DM sent to the bot by a non-bot, non-Allen user is forwarded to Allen via DM. Format:
+```
+📩 DM from **Display Name** (@username)
+Saturday, April 18 at 2:34 PM CT
+
+"message content"
+```
+
+Allen's Discord ID (`302924689704222723`) is hardcoded in `index.js` as `ALLEN_DISCORD_ID`. The bot also DMs Allen on every startup: `✅ SBI Bot is online at X:XX CT`. This confirms the bot→Allen DM channel is working and gives a visible signal that the latest code deployed.
 
 ### Adding a new slash command
 
