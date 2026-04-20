@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../lib/db');
+const { openDMChannel } = require('../lib/dm-channels');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -23,6 +24,9 @@ module.exports = {
 
     const existing = db.db.prepare('SELECT * FROM member_links WHERE discord_id = ?').get(user.id);
     db.linkMember(user.id, user.username, bookeoName);
+    openDMChannel(interaction.client, user.id).catch(err =>
+      console.error('[dm-channels] Failed to open DM for newly linked member:', err)
+    );
 
     const action = existing ? 'Updated' : 'Linked';
     await interaction.reply({
