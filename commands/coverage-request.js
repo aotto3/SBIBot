@@ -7,7 +7,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const db = require('../lib/db');
-const { SHOW_CHOICES, showLabel } = require('../lib/shows');
+const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 const { parseShiftInput, buildHeaderPost, buildShiftPost } = require('../lib/coverage');
 const utils = require('../lib/utils');
 
@@ -20,14 +20,36 @@ module.exports = {
         .setDescription('Which show you need coverage for')
         .setRequired(true)
         .addChoices(...SHOW_CHOICES)
+    )
+    .addStringOption(opt =>
+      opt.setName('character')
+        .setDescription('Your character (required for MFB and The Endings)')
+        .setRequired(false)
     ),
 
   async execute(interaction) {
-    const show = interaction.options.getString('show');
+    const show      = interaction.options.getString('show');
+    const character = interaction.options.getString('character');
+    const chars     = showCharacters(show);
+
+    if (chars) {
+      if (!character) {
+        return interaction.reply({
+          content: `❌ **${showLabel(show)}** has multiple characters (${chars.join(', ')}). Please specify your character.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (!chars.includes(character)) {
+        return interaction.reply({
+          content: `❌ Invalid character **${character}** for **${showLabel(show)}**. Valid options: ${chars.join(', ')}.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    }
 
     const modal = new ModalBuilder()
-      .setCustomId(`coverage_request_modal:${show}`)
-      .setTitle(`${showLabel(show)} — Request Coverage`);
+      .setCustomId(`coverage_request_modal:${show}:${character ?? ''}`)
+      .setTitle(`${showLabel(show)}${character ? ` (${character})` : ''} — Request Coverage`);
 
     const shiftsInput = new TextInputBuilder()
       .setCustomId('shifts')
@@ -49,7 +71,9 @@ module.exports = {
 async function handleCoverageRequestModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const show       = interaction.customId.split(':')[1];
+  const parts     = interaction.customId.split(':');
+  const show      = parts[1];
+  const character = parts[2] || null;
   const shiftsText = interaction.fields.getTextInputValue('shifts');
 
   // 1. Parse shift input
@@ -76,10 +100,12 @@ async function handleCoverageRequestModal(interaction) {
   }
 
   // 2. Check coverage channel is configured
-  const channelId = db.getConfig(`coverage_channel_${show}`);
+  const configKey  = character ? `coverage_channel_${show}_${character}` : `coverage_channel_${show}`;
+  const channelId  = db.getConfig(configKey);
   if (!channelId) {
+    const target = character ? `**${showLabel(show)} — ${character}**` : `**${showLabel(show)}**`;
     await interaction.editReply({
-      content: `❌ No coverage channel configured for **${showLabel(show)}**. Ask an admin to run \`/set-coverage-channel\`.`,
+      content: `❌ No coverage channel configured for ${target}. Ask an admin to run \`/set-coverage-channel\`.`,
     });
     return;
   }
@@ -113,6 +139,7 @@ async function handleCoverageRequestModal(interaction) {
     requester_id:   interaction.user.id,
     requester_name: requesterName,
     show,
+    character,
     channel_id:     channelId,
   });
 

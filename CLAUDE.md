@@ -110,6 +110,8 @@ Central config for all four shows. Each show entry has:
 - `emojis` — grouped as `{ yes, maybe, no }`, each an array of `{ name, unicode, label }`
 - `roleGroups` (MFB only) — defines the role-grouped tracker display (Daphne / Houdini sections)
 
+**`showCharacters(showKey)`** — returns the array of character names for multi-role shows (e.g. `['Daphne', 'Houdini']` for MFB, `['HR', 'Author']` for Endings), or `null` for single-role shows. Used by coverage commands to determine whether a character selection is required.
+
 **Custom emoji names are case-sensitive.** MFB uses: `Dno`, `Hno`, `Dmaybe`, `Hmaybe` — these must match exactly what's in the Discord server settings (capital first letter).
 
 **`roleGroups` (MFB)**: The MFB tracker shows a section per character instead of per emoji:
@@ -140,6 +142,20 @@ The Game ID is embedded in the post itself so it's always visible even if the ep
 `/cancel-custom-game` **deletes** the original post (via `message.delete()`), then marks the game as filled in the DB.
 
 The 48h unfilled reminder (run at 8am if created_at ≤ 48h ago) fetches the post's ✅ reactors and checks which Discord roles are covered. For multi-role shows (MFB, Endings), it pings only the specific missing role(s) by Discord role mention (`<@&ROLE_ID>`). Falls back to `@here` if the message can't be fetched or for single-role shows.
+
+### Coverage requests
+
+Coverage requests support per-character channel routing for multi-role shows (MFB and Endings).
+
+**Channel config keys:**
+- Single-role shows (GGB, Lucidity): `coverage_channel_{SHOW}` (e.g. `coverage_channel_GGB`)
+- Multi-role shows (MFB, Endings): `coverage_channel_{SHOW}_{CHARACTER}` (e.g. `coverage_channel_MFB_Daphne`)
+
+Set via `/set-coverage-channel`. For MFB and Endings, the `character` option is required (server-side validated — Discord doesn't support conditionally required options natively). There is no show-level fallback for multi-role shows; if the character channel isn't configured, the command errors.
+
+**`/coverage-request`** — the `character` option is required for MFB and Endings (validated before the modal opens). Character is embedded in the modal `customId` as `coverage_request_modal:{SHOW}:{CHARACTER}` (empty string for single-role shows). Character is stored on the `coverage_requests` DB record.
+
+**`/cancel-coverage-request`** — takes the `request_id` (shift ID shown in the post as "Coverage Request ID"). The requester or any ManageGuild user can cancel. Deletes all shift messages for the request (gracefully skips already-deleted messages), then calls `db.markRequestCancelled()`. Works even if the request is already filled. Always replies ephemerally.
 
 ### Check-in system
 
