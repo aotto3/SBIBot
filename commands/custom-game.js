@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db                    = require('../lib/db');
 const utils                 = require('../lib/utils');
 const { SHOWS, SHOW_CHOICES, showLabel, showRoleGroups, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('custom-game')
     .setDescription('Post a custom game availability check for a show')
-    // No permission restriction — any cast member can post one
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(opt =>
       opt.setName('show')
         .setDescription('Which show?')
