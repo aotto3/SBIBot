@@ -5,3 +5,4 @@ db.sqlite-shm
 db.sqlite-wal
 bot.log
 .claude/
+docs/*.docx
