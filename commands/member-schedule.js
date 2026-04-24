@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db     = require('../lib/db');
 const utils  = require('../lib/utils');
 const bookeo = require('../lib/bookeo');
@@ -8,7 +8,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('member-schedule')
     .setDescription("Show one cast member's upcoming shifts")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(opt =>
       opt.setName('name')
         .setDescription("Cast member's first name as it appears in Bookeo (e.g. DeShae)")
