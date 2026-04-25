@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db = require('../lib/db');
-const { SHOWS, showLabel } = require('../lib/shows');
+const cfg = require('../lib/config');
+const { showKeys, showLabel, showCharacters } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,11 +11,21 @@ module.exports = {
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const lines = Object.keys(SHOWS).map(showKey => {
-      const channelId = db.getConfig(`coverage_channel_${showKey}`);
-      const channelStr = channelId ? `<#${channelId}>` : '_Not set_';
-      return `**${showLabel(showKey)}** — ${channelStr}`;
-    });
+    const lines = [];
+    for (const showKey of showKeys()) {
+      const chars = showCharacters(showKey);
+      if (chars) {
+        for (const character of chars) {
+          const channelId  = cfg.getCoverageChannelId(showKey, character);
+          const channelStr = channelId ? `<#${channelId}>` : '_Not set_';
+          lines.push(`**${showLabel(showKey)} — ${character}** — ${channelStr}`);
+        }
+      } else {
+        const channelId  = cfg.getCoverageChannelId(showKey);
+        const channelStr = channelId ? `<#${channelId}>` : '_Not set_';
+        lines.push(`**${showLabel(showKey)}** — ${channelStr}`);
+      }
+    }
 
     await interaction.editReply({
       content: `**Coverage request channels:**\n${lines.join('\n')}`,

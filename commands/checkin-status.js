@@ -1,9 +1,8 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db    = require('../lib/db');
 const utils = require('../lib/utils');
-const { showLabel, hasCheckin, SHOWS } = require('../lib/shows');
-
-const CENTRAL_TZ = 'America/Chicago';
+const { showLabel } = require('../lib/shows');
+const { CENTRAL_TZ } = require('../lib/utils');
 
 function fmtTime(unixSeconds) {
   if (!unixSeconds) return null;

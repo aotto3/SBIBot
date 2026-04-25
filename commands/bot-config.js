@@ -1,14 +1,14 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db = require('../lib/db');
+const cfg = require('../lib/config');
 
 const SETTINGS = {
   weekly_shifts: {
-    key:         'weekly_shifts_enabled',
-    label:       'Weekly shift DMs (every Monday)',
+    label: 'Weekly shift DMs (every Monday)',
+    set:   (v) => cfg.setWeeklyShiftsEnabled(v),
   },
   daily_shifts: {
-    key:         'daily_shifts_enabled',
-    label:       'Daily 24hr shift DMs',
+    label: 'Daily 24hr shift DMs',
+    set:   (v) => cfg.setDailyShiftsEnabled(v),
   },
 };
 
@@ -41,7 +41,7 @@ module.exports = {
     const value      = interaction.options.getString('value');
     const setting    = SETTINGS[settingKey];
 
-    db.setConfig(setting.key, value === 'on' ? 'true' : 'false');
+    setting.set(value === 'on');
 
     const icon   = value === 'on' ? '✅' : '❌';
     const status = value === 'on' ? 'enabled' : 'disabled';

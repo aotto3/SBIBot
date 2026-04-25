@@ -7,6 +7,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const db = require('../lib/db');
+const cfg = require('../lib/config');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 const { parseShiftInput, buildHeaderPost, buildShiftPost } = require('../lib/coverage');
 const utils = require('../lib/utils');
@@ -100,8 +101,7 @@ async function handleCoverageRequestModal(interaction) {
   }
 
   // 2. Check coverage channel is configured
-  const configKey  = character ? `coverage_channel_${show}_${character}` : `coverage_channel_${show}`;
-  const channelId  = db.getConfig(configKey);
+  const channelId  = cfg.getCoverageChannelId(show, character);
   if (!channelId) {
     const target = character ? `**${showLabel(show)} — ${character}**` : `**${showLabel(show)}**`;
     await interaction.editReply({
