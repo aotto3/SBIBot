@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db = require('../lib/db');
+const cfg = require('../lib/config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,7 +17,7 @@ module.exports = {
 
     const channel = interaction.options.getChannel('channel');
 
-    db.setConfig('error_channel_id', channel.id);
+    cfg.setErrorChannelId(channel.id);
 
     await interaction.editReply({
       content: `✅ Error channel set to <#${channel.id}>.`,

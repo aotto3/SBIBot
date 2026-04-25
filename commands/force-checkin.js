@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const checkin = require('../lib/checkin');
 const utils   = require('../lib/utils');
-const { CHECKIN_SHOW_CHOICES, showLabel, SHOWS } = require('../lib/shows');
+const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -51,7 +51,7 @@ module.exports = {
     } else if (pending.length === 1) {
       rec = pending[0];
     } else {
-      const showList = pending.map(r => SHOWS[r.show].label).join(', ');
+      const showList = pending.map(r => showLabel(r.show)).join(', ');
       await interaction.editReply({
         content: `<@${target.id}> has multiple pending check-ins today: **${showList}**.\nUse the \`show\` option to specify which one.`,
       });

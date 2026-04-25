@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db = require('../lib/db');
+const cfg = require('../lib/config');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 
 module.exports = {
@@ -45,12 +45,12 @@ module.exports = {
         });
         return;
       }
-      db.setConfig(`coverage_channel_${show}_${character}`, channel.id);
+      cfg.setCoverageChannelId(show, character, channel.id);
       await interaction.editReply({
         content: `✅ Coverage request channel for **${showLabel(show)} — ${character}** set to <#${channel.id}>.`,
       });
     } else {
-      db.setConfig(`coverage_channel_${show}`, channel.id);
+      cfg.setCoverageChannelId(show, null, channel.id);
       await interaction.editReply({
         content: `✅ Coverage request channel for **${showLabel(show)}** set to <#${channel.id}>.`,
       });

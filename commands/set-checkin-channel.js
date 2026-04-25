@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const db = require('../lib/db');
+const cfg = require('../lib/config');
 const { CHECKIN_SHOW_CHOICES, showLabel } = require('../lib/shows');
 
 module.exports = {
@@ -25,7 +25,7 @@ module.exports = {
     const show    = interaction.options.getString('show');
     const channel = interaction.options.getChannel('channel');
 
-    db.setConfig(`checkin_alert_channel_${show}`, channel.id);
+    cfg.setCheckinAlertChannelId(show, channel.id);
 
     await interaction.editReply({
       content: `✅ Check-in alert channel for **${showLabel(show)}** set to <#${channel.id}>.`,

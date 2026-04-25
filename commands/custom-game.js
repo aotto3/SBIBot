@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db                    = require('../lib/db');
 const utils                 = require('../lib/utils');
-const { SHOWS, SHOW_CHOICES, showLabel, showRoleGroups, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
+const { SHOW_CHOICES, showLabel, showRoleGroups, showEmojis, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -79,7 +79,7 @@ module.exports = {
 
     // React prompt: skip for MFB (role-grouped emojis speak for themselves)
     if (!showRoleGroups(showKey)) {
-      const promptLines = buildPromptLines(SHOWS[showKey], guild);
+      const promptLines = buildPromptLines(showEmojis(showKey), guild);
       lines.push('', ...promptLines);
     }
 
@@ -110,9 +110,8 @@ module.exports = {
 /**
  * Build the compact react-prompt line for shows with single emojis per group.
  */
-function buildPromptLines(config, guild) {
-  const { emojis } = config;
-  const groups     = [emojis.yes, emojis.maybe, emojis.no];
-  const parts      = groups.map(g => `${emojiDisplay(guild, g[0])} ${g[0].label.toLowerCase()}`);
+function buildPromptLines(emojis, guild) {
+  const groups = [emojis.yes, emojis.maybe, emojis.no];
+  const parts  = groups.map(g => `${emojiDisplay(guild, g[0])} ${g[0].label.toLowerCase()}`);
   return [`React: ${parts.join('  ')}`];
 }
