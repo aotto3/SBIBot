@@ -165,23 +165,36 @@ test('buildHeaderPost — includes react instructions', () => {
   assert.ok(result.includes('✅'), 'should include ✅ instruction');
 });
 
+test('buildHeaderPost — includes bolded character when present', () => {
+  const request = { requester_name: 'Alice', show: 'MFB', character: 'Daphne' };
+  const result  = buildHeaderPost(request, [{ date: '2026-05-01', time: '19:00' }]);
+  assert.ok(result.includes('**Daphne**'), 'should bold character name');
+});
+
+test('buildHeaderPost — no character mention for single-role show', () => {
+  const request = { requester_name: 'Alice', show: 'GGB', character: null };
+  const result  = buildHeaderPost(request, [{ date: '2026-05-01', time: '19:00' }]);
+  assert.ok(!result.includes('**null**'), 'should not include null character');
+  assert.ok(result.includes('coverage for 1 shift'), 'should say coverage without character');
+});
+
 // ─── buildShiftPost ───────────────────────────────────────────────────────────
 
-test('buildShiftPost — includes show label, formatted date, and formatted time', () => {
+test('buildShiftPost — formatted date and time, no show label', () => {
   const request = { show: 'GGB' };
   const shift   = { date: '2027-01-01', time: '17:30' };
   const result  = buildShiftPost(request, shift);
-  assert.ok(result.includes('Great Gold Bird'), 'should include show label');
-  assert.ok(result.includes('5:30 PM'),         'should include formatted time');
-  assert.ok(result.includes('2027'),            'should include year');
+  assert.ok(!result.includes('Great Gold Bird'), 'should not include show label');
+  assert.ok(result.includes('5:30 PM'),          'should include formatted time');
+  assert.ok(result.includes('2027'),             'should include year');
 });
 
-test('buildShiftPost — works for MFB show', () => {
+test('buildShiftPost — no show label for MFB either', () => {
   const request = { show: 'MFB' };
   const shift   = { date: '2026-06-15', time: '19:00' };
   const result  = buildShiftPost(request, shift);
-  assert.ok(result.includes('Man From Beyond'), 'should include show label');
-  assert.ok(result.includes('7:00 PM'),         'should include formatted time');
+  assert.ok(!result.includes('Man From Beyond'), 'should not include show label');
+  assert.ok(result.includes('7:00 PM'),          'should include formatted time');
 });
 
 // ─── buildConfirmationPost ────────────────────────────────────────────────────
