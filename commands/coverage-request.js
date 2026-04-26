@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const db = require('../lib/db');
 const cfg = require('../lib/config');
+const members = require('../lib/members');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 const { parseShiftInput, buildHeaderPost, buildShiftPost } = require('../lib/coverage');
 const utils = require('../lib/utils');
@@ -134,7 +135,7 @@ async function handleCoverageRequestModal(interaction) {
   }
 
   // 4. Create DB records
-  const requesterName = interaction.member?.displayName ?? interaction.user.displayName ?? interaction.user.username;
+  const requesterName = members.getDisplayName(interaction.user.id, interaction.member?.displayName ?? interaction.user.displayName ?? interaction.user.username);
   const requestId = db.createCoverageRequest({
     requester_id:   interaction.user.id,
     requester_name: requesterName,
