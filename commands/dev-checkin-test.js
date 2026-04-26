@@ -81,7 +81,7 @@ module.exports = {
     }
 
     // Schedule the no-show alert
-    checkin.scheduleCheckinAlert(rec);
+    checkin.scheduleCheckinAlert(interaction.client, rec);
 
     // Send the DM
     const showName = showLabel(show);

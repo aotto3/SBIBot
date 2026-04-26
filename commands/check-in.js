@@ -32,7 +32,7 @@ module.exports = {
 
     if (pending.length === 1) {
       const rec = pending[0];
-      await checkin.performCheckin(rec.id);
+      await checkin.performCheckin(rec.id, {}, interaction.client);
       await interaction.editReply({
         content: `✅ Checked in for **${showLabel(rec.show)}** today.`,
       });
