@@ -22,7 +22,18 @@ module.exports = {
       opt.setName('character')
         .setDescription('Character to configure (required for MFB and The Endings)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
+
+  async autocomplete(interaction) {
+    const show    = interaction.options.getString('show');
+    const chars   = show ? showCharacters(show) : null;
+    const focused = interaction.options.getFocused().toLowerCase();
+    const choices = chars
+      ? chars.filter(c => c.toLowerCase().startsWith(focused)).map(c => ({ name: c, value: c }))
+      : [];
+    await interaction.respond(choices);
+  },
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
