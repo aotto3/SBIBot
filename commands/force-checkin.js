@@ -58,7 +58,7 @@ module.exports = {
       return;
     }
 
-    await checkin.performCheckin(rec.id, { forcedBy: interaction.user.id });
+    await checkin.performCheckin(rec.id, { forcedBy: interaction.user.id }, interaction.client);
 
     await interaction.editReply({
       content: `✅ <@${target.id}> manually confirmed as checked in for **${showLabel(rec.show)}** today.`,

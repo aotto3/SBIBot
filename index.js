@@ -58,9 +58,8 @@ client.once(Events.ClientReady, async c => {
   // Starting the scheduler before seeding completes causes a race where the
   // DM job queries pending records before they've been inserted.
   // _trySeed will retry in the background on failure without blocking startup.
-  checkin.init(client);
   const seedDate = utils.todayCentral();
-  await checkin.seedWithRetry(seedDate, 1);
+  await checkin.seedWithRetry(client, seedDate, 1);
 
   openDMChannels(client).catch(err => console.error('[dm-channels] Unexpected startup error:', err));
   require('./lib/scheduler').start(client);
@@ -139,12 +138,12 @@ async function handleCheckinButton(interaction) {
     await interaction.reply({ content: 'No check-in record found for you.', flags: MessageFlags.Ephemeral });
     return;
   }
-  if (rec.checked_in_at) {
+
+  const result = await checkin.performCheckin(rec.id, {}, client);
+  if (result.status === 'already_checked_in') {
     await interaction.reply({ content: 'You already checked in!', flags: MessageFlags.Ephemeral });
     return;
   }
-
-  await checkin.performCheckin(rec.id);
 
   const timeStr = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Chicago',
@@ -181,12 +180,12 @@ async function handleCheckinSelect(interaction) {
     await interaction.update({ content: 'No check-in record found.', components: [] });
     return;
   }
-  if (rec.checked_in_at) {
+
+  const result = await checkin.performCheckin(rec.id, {}, client);
+  if (result.status === 'already_checked_in') {
     await interaction.update({ content: 'You already checked in for that show!', components: [] });
     return;
   }
-
-  await checkin.performCheckin(rec.id);
   await interaction.update({
     content: `✅ Checked in for **${showLabel(show)}** today.`,
     components: [],
