@@ -19,6 +19,10 @@ const {
   buildShiftPost,
   buildConfirmationPost,
   buildResolvedHeaderPost,
+  buildFillableDM,
+  buildEodDM,
+  buildConfirmationMessage,
+  planMissingRolePings,
 } = require('../lib/coverage');
 
 // ─── parseShiftInput ──────────────────────────────────────────────────────────
@@ -235,4 +239,157 @@ test('buildResolvedHeaderPost — no role mention by default', () => {
   const request = { requester_name: 'Alice', show: 'GGB' };
   const result  = buildResolvedHeaderPost(request);
   assert.ok(!result.startsWith('<@'), 'should not start with a mention by default');
+});
+
+// ─── buildFillableDM ──────────────────────────────────────────────────────────
+
+test('buildFillableDM — multi-role: names grouped by role on separate lines', () => {
+  const result = buildFillableDM({
+    show:            'MFB',
+    date:            '2026-05-01',
+    time:            '19:00',
+    character:       null,
+    availableByRole: { Daphne: ['Alice'], Houdini: ['Bob', 'Carol'] },
+    postLink:        'https://discord.com/channels/1/2/3',
+  });
+  assert.ok(result.includes('Man From Beyond'), 'should include show label');
+  assert.ok(result.includes('Daphne: Alice'),   'should list Daphne reactors');
+  assert.ok(result.includes('Houdini: Bob'),    'should list Houdini reactors');
+  assert.ok(!result.includes('Available:'),     'should not use flat Available: line');
+});
+
+test('buildFillableDM — includes character name when present', () => {
+  const result = buildFillableDM({
+    show:            'Endings',
+    date:            '2026-06-01',
+    time:            '19:00',
+    character:       'HR',
+    availableByRole: ['Dave'],
+    postLink:        'https://discord.com/channels/1/2/3',
+  });
+  assert.ok(result.includes('HR'), 'should include character name');
+});
+
+test('buildFillableDM — single-role: includes show label, date+time, names, link', () => {
+  const result = buildFillableDM({
+    show:           'GGB',
+    date:           '2026-05-01',
+    time:           '19:00',
+    character:      null,
+    availableByRole: ['Alice', 'Bob'],
+    postLink:       'https://discord.com/channels/1/2/3',
+  });
+  assert.ok(result.includes('Great Gold Bird'),              'should include show label');
+  assert.ok(result.includes('May 1'),                        'should include date');
+  assert.ok(result.includes('7:00 PM'),                      'should include time');
+  assert.ok(result.includes('Alice'),                        'should include first name');
+  assert.ok(result.includes('Bob'),                          'should include second name');
+  assert.ok(result.includes('https://discord.com/channels/1/2/3'), 'should include link');
+});
+
+// ─── buildEodDM ───────────────────────────────────────────────────────────────
+
+test('buildEodDM — empty list returns empty string', () => {
+  assert.equal(buildEodDM([]), '');
+});
+
+test('buildEodDM — single item contains show, date, names, and link', () => {
+  const result = buildEodDM([{
+    show:            'GGB',
+    date:            '2026-05-01',
+    time:            '19:00',
+    character:       null,
+    availableByRole: ['Alice'],
+    postLink:        'https://discord.com/channels/1/2/3',
+  }]);
+  assert.ok(result.includes('Great Gold Bird'),                    'should include show label');
+  assert.ok(result.includes('Alice'),                              'should include name');
+  assert.ok(result.includes('https://discord.com/channels/1/2/3'), 'should include link');
+});
+
+test('buildEodDM — multiple items each have their own link', () => {
+  const result = buildEodDM([
+    { show: 'GGB', date: '2026-05-01', time: '19:00', character: null, availableByRole: ['Alice'], postLink: 'https://discord.com/link1' },
+    { show: 'MFB', date: '2026-05-02', time: '17:30', character: null, availableByRole: { Daphne: ['Bob'] }, postLink: 'https://discord.com/link2' },
+  ]);
+  assert.ok(result.includes('https://discord.com/link1'), 'should include first link');
+  assert.ok(result.includes('https://discord.com/link2'), 'should include second link');
+  assert.ok(result.includes('Great Gold Bird'),            'should include first show');
+  assert.ok(result.includes('Man From Beyond'),            'should include second show');
+});
+
+// ─── buildConfirmationMessage ─────────────────────────────────────────────────
+
+test('buildConfirmationMessage — coverage shift: @mentions taker and requester', () => {
+  const result = buildConfirmationMessage({
+    type:      'shift',
+    show:      'GGB',
+    date:      '2026-05-01',
+    time:      '19:00',
+    takers:    [{ userId: 'U111', role: null }],
+    requester: 'U222',
+  });
+  assert.ok(result.includes('<@U111>'), 'should mention taker');
+  assert.ok(result.includes('<@U222>'), 'should mention requester');
+  assert.ok(result.includes('May 1'),  'should include date');
+  assert.ok(result.includes('7:00 PM'), 'should include time');
+});
+
+test('buildConfirmationMessage — single-role game: includes show name, no requester mention', () => {
+  const result = buildConfirmationMessage({
+    type:      'game',
+    show:      'GGB',
+    date:      '2026-05-01',
+    time:      '19:00',
+    takers:    [{ userId: 'U111', role: null }],
+    requester: null,
+  });
+  assert.ok(result.includes('<@U111>'),       'should mention taker');
+  assert.ok(!result.includes('<@null>'),      'should not mention null requester');
+  assert.ok(result.includes('Great Gold Bird'), 'should include show label');
+  assert.ok(result.includes('custom game'),   'should say custom game');
+});
+
+test('buildConfirmationMessage — multi-role game: each taker listed with their role', () => {
+  const result = buildConfirmationMessage({
+    type:      'game',
+    show:      'MFB',
+    date:      '2026-05-01',
+    time:      '19:00',
+    takers:    [{ userId: 'U111', role: 'Daphne' }, { userId: 'U222', role: 'Houdini' }],
+    requester: null,
+  });
+  assert.ok(result.includes('<@U111> as Daphne'),  'should list first taker with role');
+  assert.ok(result.includes('<@U222> as Houdini'), 'should list second taker with role');
+  assert.ok(result.includes('Man From Beyond'),    'should include show label');
+  assert.ok(!result.includes('custom game'),       'should not say "custom game" for multi-role');
+});
+
+// ─── planMissingRolePings ─────────────────────────────────────────────────────
+
+test('planMissingRolePings — excludes posts where missingRoles is empty', () => {
+  const shifts = [{ show: 'GGB', channel_id: 'C1', shift_message_id: 'M1', missingRoles: [] }];
+  const result = planMissingRolePings(shifts, []);
+  assert.equal(result.length, 0, 'should return nothing when all roles are covered');
+});
+
+test('planMissingRolePings — single-role shift returns entry with its missing role', () => {
+  const shifts = [{ show: 'GGB', channel_id: 'C1', shift_message_id: 'M1', missingRoles: ['Mikey'] }];
+  const result = planMissingRolePings(shifts, []);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].roleNames, ['Mikey']);
+  assert.equal(result[0].channelId, 'C1');
+  assert.equal(result[0].messageId, 'M1');
+});
+
+test('planMissingRolePings — multi-role game returns only missing roles', () => {
+  const games = [{ show: 'MFB', channel_id: 'C2', message_id: 'M2', missingRoles: ['Houdini'] }];
+  const result = planMissingRolePings([], games);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].roleNames, ['Houdini']);
+  assert.equal(result[0].messageId, 'M2');
+});
+
+test('planMissingRolePings — empty inputs return empty array', () => {
+  assert.deepEqual(planMissingRolePings([], []), []);
 });
