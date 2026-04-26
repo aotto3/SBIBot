@@ -17,7 +17,7 @@ const checkin = require('./lib/checkin');
 const { showLabel } = require('./lib/shows');
 const utils   = require('./lib/utils');
 const { handleCoverageRequestModal } = require('./commands/coverage-request');
-const { handleConfirmCoverageButton, handleConfirmCoverageSelect } = require('./lib/confirm');
+const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit } = require('./lib/confirm');
 const { openDMChannels } = require('./lib/dm-channels');
 const fs   = require('fs');
 const path = require('path');
@@ -218,6 +218,18 @@ client.on(Events.InteractionCreate, async interaction => {
   // Confirm Coverage select menu
   if (interaction.isStringSelectMenu() && interaction.customId.startsWith('confirm_coverage_select:')) {
     try { await handleConfirmCoverageSelect(interaction); } catch (err) { console.error('[confirm] Select handler error:', err); }
+    return;
+  }
+
+  // Multi-role confirm select (MFB / Endings games)
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('cmr_select:')) {
+    try { await handleMultiRoleSelect(interaction); } catch (err) { console.error('[confirm] Multi-role select error:', err); }
+    return;
+  }
+
+  // Multi-role confirm submit button
+  if (interaction.isButton() && interaction.customId.startsWith('cmr_submit:')) {
+    try { await handleMultiRoleSubmit(interaction); } catch (err) { console.error('[confirm] Multi-role submit error:', err); }
     return;
   }
 
