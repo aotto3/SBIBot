@@ -214,6 +214,15 @@ client.on(Events.InteractionCreate, async interaction => {
     return;
   }
 
+  // Autocomplete
+  if (interaction.isAutocomplete()) {
+    const command = client.commands.get(interaction.commandName);
+    if (command?.autocomplete) {
+      try { await command.autocomplete(interaction); } catch (err) { console.error('[autocomplete] error:', err); }
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);

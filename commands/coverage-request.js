@@ -27,7 +27,18 @@ module.exports = {
       opt.setName('character')
         .setDescription('Your character (required for MFB and The Endings)')
         .setRequired(false)
+        .setAutocomplete(true)
     ),
+
+  async autocomplete(interaction) {
+    const show    = interaction.options.getString('show');
+    const chars   = show ? showCharacters(show) : null;
+    const focused = interaction.options.getFocused().toLowerCase();
+    const choices = chars
+      ? chars.filter(c => c.toLowerCase().startsWith(focused)).map(c => ({ name: c, value: c }))
+      : [];
+    await interaction.respond(choices);
+  },
 
   async execute(interaction) {
     const show      = interaction.options.getString('show');
@@ -51,7 +62,7 @@ module.exports = {
 
     const modal = new ModalBuilder()
       .setCustomId(`coverage_request_modal:${show}:${character ?? ''}`)
-      .setTitle(`${showLabel(show)}${character ? ` (${character})` : ''} — Request Coverage`);
+      .setTitle(`${showLabel(show)}${character ? ` (${character})` : ''} — Coverage`);
 
     const shiftsInput = new TextInputBuilder()
       .setCustomId('shifts')
