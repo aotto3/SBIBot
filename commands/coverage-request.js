@@ -11,6 +11,7 @@ const cfg = require('../lib/config');
 const members = require('../lib/members');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 const { parseShiftInput, buildHeaderPost, buildShiftPost } = require('../lib/coverage');
+const { buildConfirmButton } = require('../lib/confirm');
 const utils = require('../lib/utils');
 
 module.exports = {
@@ -170,14 +171,14 @@ async function handleCoverageRequestModal(interaction) {
   const firstShiftLine = buildShiftPost(request, shifts[0]);
   const firstContent  = `${headerText}\n\n${firstShiftLine}\n_Coverage Request ID: ${shifts[0].id}_`;
 
-  const headerMsg = await channel.send(firstContent);
+  const headerMsg = await channel.send({ content: firstContent, components: [buildConfirmButton(false, 'shift', shifts[0].id)] });
   db.setCoverageRequestHeaderMessageId(requestId, headerMsg.id);
   db.setCoverageShiftMessageId(shifts[0].id, headerMsg.id);
 
   // Remaining shifts each get their own post
   for (const shift of shifts.slice(1)) {
     const content = `${buildShiftPost(request, shift)}\n_Coverage Request ID: ${shift.id}_`;
-    const msg     = await channel.send(content);
+    const msg     = await channel.send({ content, components: [buildConfirmButton(false, 'shift', shift.id)] });
     db.setCoverageShiftMessageId(shift.id, msg.id);
   }
 

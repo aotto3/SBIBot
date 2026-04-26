@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db                    = require('../lib/db');
+const { buildConfirmButton } = require('../lib/confirm');
 const utils                 = require('../lib/utils');
 const { SHOW_CHOICES, showLabel, showRoleGroups, showEmojis, allEmojisForShow, emojiDisplay, reactWith } = require('../lib/shows');
 
@@ -95,7 +96,7 @@ module.exports = {
       return interaction.editReply(`Couldn't access <#${channel.id}>: ${err.message}`);
     }
 
-    const msg = await targetChannel.send(content);
+    const msg = await targetChannel.send({ content, components: [buildConfirmButton(false, 'game', id)] });
 
     for (const emoji of emojis) {
       await reactWith(msg, guild, emoji);
