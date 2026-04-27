@@ -17,9 +17,8 @@ module.exports = {
         .setDescription('What to delete')
         .setRequired(true)
         .addChoices(
-          { name: 'Coverage Shift (individual date/time)',      value: 'shift'   },
-          { name: 'Coverage Request (entire multi-shift post)', value: 'request' },
-          { name: 'Custom Game',                                value: 'game'    },
+          { name: 'Coverage Shift', value: 'shift' },
+          { name: 'Custom Game',    value: 'game'  },
         )
     )
     .addIntegerOption(opt =>
@@ -65,35 +64,6 @@ module.exports = {
       }
 
       return interaction.editReply(`✅ Shift \`${id}\` purged.`);
-    }
-
-    if (type === 'request') {
-      const request = db.getCoverageRequest(id);
-      if (!request) return interaction.editReply(`❌ No coverage request found with ID \`${id}\`.`);
-
-      const shifts = db.getCoverageShiftsByRequest(id);
-
-      // Delete all Discord posts (collect unique message IDs to avoid double-deleting the header)
-      const seen = new Set();
-      for (const s of shifts) {
-        if (!s.shift_message_id || seen.has(s.shift_message_id)) continue;
-        seen.add(s.shift_message_id);
-        try {
-          const channel = await interaction.client.channels.fetch(request.channel_id);
-          const message = await channel.messages.fetch(s.shift_message_id);
-          await message.delete();
-        } catch { /* already gone */ }
-      }
-      if (request.header_message_id && !seen.has(request.header_message_id)) {
-        try {
-          const channel = await interaction.client.channels.fetch(request.channel_id);
-          const message = await channel.messages.fetch(request.header_message_id);
-          await message.delete();
-        } catch { /* already gone */ }
-      }
-
-      db.hardDeleteRequest(id);
-      return interaction.editReply(`✅ Coverage request \`${id}\` and all its shifts purged.`);
     }
 
     if (type === 'game') {
