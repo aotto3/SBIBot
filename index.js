@@ -27,6 +27,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.DirectMessages,
   ],
   // Partials needed so the bot can read reactions on messages it didn't see posted
