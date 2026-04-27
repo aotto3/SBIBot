@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../lib/db');
-const { planShiftCancel } = require('../lib/coverage');
+const { planShiftCancel, buildShiftPost, buildResolvedHeaderPost } = require('../lib/coverage');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,20 +47,37 @@ module.exports = {
 
     if (plan.action === 'delete-all') {
       db.markRequestCancelled(request.id);
-      if (shift.shift_message_id) {
-        try { await (await channel.messages.fetch(shift.shift_message_id)).delete(); } catch { /* already gone */ }
-      }
-      if (request.header_message_id && request.header_message_id !== shift.shift_message_id) {
-        try { await (await channel.messages.fetch(request.header_message_id)).delete(); } catch { /* already gone */ }
+      if (shift.shift_message_id === request.header_message_id) {
+        try {
+          const msg = await channel.messages.fetch(request.header_message_id);
+          await msg.edit({ content: buildResolvedHeaderPost(request), components: [] });
+        } catch { /* already gone */ }
+      } else {
+        if (shift.shift_message_id) {
+          try {
+            const msg = await channel.messages.fetch(shift.shift_message_id);
+            await msg.edit({ content: `❌ **Cancelled** — ${buildShiftPost(request, shift)}`, components: [] });
+          } catch { /* already gone */ }
+        }
+        if (request.header_message_id) {
+          try {
+            const msg = await channel.messages.fetch(request.header_message_id);
+            await msg.edit({ content: buildResolvedHeaderPost(request), components: [] });
+          } catch { /* already gone */ }
+        }
       }
     } else if (plan.action === 'edit-header') {
       try {
         const msg = await channel.messages.fetch(shift.shift_message_id);
-        await msg.edit({ content: plan.headerContent, components: [] });
+        const cancelledNote = `~~${buildShiftPost(request, shift)}~~ — Cancelled`;
+        await msg.edit({ content: `${plan.headerContent}\n${cancelledNote}`, components: [] });
       } catch { /* already gone */ }
     } else {
       if (shift.shift_message_id) {
-        try { await (await channel.messages.fetch(shift.shift_message_id)).delete(); } catch { /* already gone */ }
+        try {
+          const msg = await channel.messages.fetch(shift.shift_message_id);
+          await msg.edit({ content: `❌ **Cancelled** — ${buildShiftPost(request, shift)}`, components: [] });
+        } catch { /* already gone */ }
       }
     }
 
