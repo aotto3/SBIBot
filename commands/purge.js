@@ -17,9 +17,9 @@ module.exports = {
         .setDescription('What to delete')
         .setRequired(true)
         .addChoices(
-          { name: 'shift',   value: 'shift'   },
-          { name: 'request', value: 'request' },
-          { name: 'game',    value: 'game'    },
+          { name: 'Coverage Shift (individual date/time)',      value: 'shift'   },
+          { name: 'Coverage Request (entire multi-shift post)', value: 'request' },
+          { name: 'Custom Game',                                value: 'game'    },
         )
     )
     .addIntegerOption(opt =>
