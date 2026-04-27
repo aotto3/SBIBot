@@ -31,13 +31,18 @@ module.exports = {
     // Build a flat list of display items
     const items = [];
 
+    const guildId = interaction.guildId;
+
     for (const s of openShifts) {
       const [y, mo, d] = s.date.split('-').map(Number);
       const dateStr    = utils.formatMeetingDate(new Date(y, mo - 1, d));
       const timeStr    = s.time ? ` at ${utils.formatTime(s.time)}` : '';
       const charStr    = s.character ? ` (${s.character})` : '';
+      const link       = s.shift_message_id
+        ? `\nhttps://discord.com/channels/${guildId}/${s.channel_id}/${s.shift_message_id}`
+        : '';
       items.push({
-        line: `**${showLabel(s.show)}${charStr}** — ${dateStr}${timeStr}\nRequested by ${s.requester_name}  •  Shift ID: \`${s.id}\``,
+        line: `**${showLabel(s.show)}${charStr}** — ${dateStr}${timeStr}\nRequested by ${s.requester_name}  •  Shift ID: \`${s.id}\`${link}`,
         type: 'shift',
         id:   s.id,
       });
@@ -47,8 +52,11 @@ module.exports = {
       const [y, mo, d] = g.date.split('-').map(Number);
       const dateStr    = utils.formatMeetingDate(new Date(y, mo - 1, d));
       const timeStr    = g.time ? ` at ${utils.formatTime(g.time)}` : '';
+      const link       = g.message_id
+        ? `\nhttps://discord.com/channels/${guildId}/${g.channel_id}/${g.message_id}`
+        : '';
       items.push({
-        line: `**${showLabel(g.show)}** — ${dateStr}${timeStr}\nCustom Game  •  Game ID: \`${g.id}\``,
+        line: `**${showLabel(g.show)}** — ${dateStr}${timeStr}\nCustom Game  •  Game ID: \`${g.id}\`${link}`,
         type: 'game',
         id:   g.id,
       });
