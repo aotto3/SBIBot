@@ -226,7 +226,7 @@ test('buildResolvedHeaderPost — includes requester name and all-covered messag
   const request = { requester_name: 'Alice', show: 'GGB' };
   const result  = buildResolvedHeaderPost(request);
   assert.ok(result.includes('**Alice**'), 'should bold requester name');
-  assert.ok(result.includes('covered'),   'should mention coverage');
+  assert.ok(result.includes('resolved'),  'should mention resolution');
   assert.ok(result.includes('Thank you'), 'should include thank you');
 });
 
