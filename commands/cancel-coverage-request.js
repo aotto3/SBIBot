@@ -1,13 +1,14 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db = require('../lib/db');
+const { planShiftCancel } = require('../lib/coverage');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('cancel-coverage-request')
-    .setDescription('Cancel a coverage request and delete its Discord post(s)')
+    .setDescription('Cancel a single shift from a coverage request')
     .addIntegerOption(opt =>
       opt.setName('request_id')
-        .setDescription('Coverage Request ID shown at the bottom of the post')
+        .setDescription('The Shift ID shown at the bottom of the shift post')
         .setRequired(true)
     ),
 
@@ -18,13 +19,16 @@ module.exports = {
     const shift   = db.getCoverageShiftById(shiftId);
 
     if (!shift) {
-      return interaction.editReply(`❌ No coverage request found with ID \`${shiftId}\`.`);
+      return interaction.editReply(`❌ No shift found with ID \`${shiftId}\`.`);
+    }
+
+    if (shift.status === 'cancelled') {
+      return interaction.editReply(`❌ Shift \`${shiftId}\` is already cancelled.`);
     }
 
     const request = db.getCoverageRequest(shift.request_id);
-
     if (!request) {
-      return interaction.editReply(`❌ No coverage request found with ID \`${shiftId}\`.`);
+      return interaction.editReply(`❌ Request not found.`);
     }
 
     // Permission: requester or ManageGuild
@@ -35,29 +39,32 @@ module.exports = {
       return interaction.editReply(`❌ You can only cancel your own coverage requests.`);
     }
 
-    if (request.status === 'cancelled') {
-      return interaction.editReply(`❌ Coverage request \`${shiftId}\` is already cancelled.`);
-    }
+    db.markShiftCancelled(shiftId);
 
-    // Delete all shift messages (collect unique IDs — first shift shares a message with the header)
-    const allShifts = db.getCoverageShiftsByRequest(request.id);
-    const seen      = new Set();
+    const remaining = db.getCoverageShiftsByRequest(request.id).filter(s => s.status === 'open');
+    const plan      = planShiftCancel(shift, request, remaining);
+    const channel   = await interaction.client.channels.fetch(request.channel_id);
 
-    for (const s of allShifts) {
-      if (!s.shift_message_id || seen.has(s.shift_message_id)) continue;
-      seen.add(s.shift_message_id);
-
+    if (plan.action === 'delete-all') {
+      db.markRequestCancelled(request.id);
+      if (shift.shift_message_id) {
+        try { await (await channel.messages.fetch(shift.shift_message_id)).delete(); } catch { /* already gone */ }
+      }
+      if (request.header_message_id && request.header_message_id !== shift.shift_message_id) {
+        try { await (await channel.messages.fetch(request.header_message_id)).delete(); } catch { /* already gone */ }
+      }
+    } else if (plan.action === 'edit-header') {
       try {
-        const channel = await interaction.client.channels.fetch(request.channel_id);
-        const message = await channel.messages.fetch(s.shift_message_id);
-        await message.delete();
-      } catch (err) {
-        // Already deleted or inaccessible — skip silently
+        const msg = await channel.messages.fetch(shift.shift_message_id);
+        await msg.edit({ content: plan.headerContent, components: [] });
+      } catch { /* already gone */ }
+    } else {
+      if (shift.shift_message_id) {
+        try { await (await channel.messages.fetch(shift.shift_message_id)).delete(); } catch { /* already gone */ }
       }
     }
 
-    db.markRequestCancelled(request.id);
-
-    await interaction.editReply(`✅ Coverage request \`${shiftId}\` cancelled and post(s) deleted.`);
+    console.log(`[coverage] ${interaction.user.tag} cancelled shift ${shiftId} via /cancel-coverage-request`);
+    await interaction.editReply(`✅ Shift \`${shiftId}\` cancelled and post updated.`);
   },
 };
