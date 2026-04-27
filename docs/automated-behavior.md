@@ -74,7 +74,7 @@ The bot seeds check-in records for the new day and schedules alert timers. This 
 
 ### 8:00 AM CT Daily — Reminders and Follow-ups
 
-Each morning at 8am, the bot runs two checks:
+Each morning at 8am, the bot runs three checks:
 
 **Meeting reminders**
 Scans all active meetings. If a meeting is exactly 7 days away or 1 day away, the bot posts a reminder in the configured channel. The reminder includes the meeting title, date/time, duration, a Google Calendar link, and RSVP reactions (✅ ❌ ❓). Each reminder is only ever posted once — the bot tracks what's already been sent.
@@ -84,6 +84,9 @@ Scans all open custom game posts older than 48 hours that haven't received a fol
 - For single-role shows (GGB, Lucidity): posts a follow-up pinging `@here`
 - For multi-role shows (MFB, Endings): checks which roles are still uncovered and pings only those specific roles
 - Tags the original requester in the follow-up
+
+**Coverage role pings**
+Scans all open coverage shift posts. For any shift that still has uncovered roles, the bot posts a role mention in the coverage channel tagging the specific Discord role(s) needed. This runs alongside the 48-hour custom game follow-up.
 
 ---
 
@@ -98,6 +101,23 @@ If a cast member is not linked via `/link-member`, they are silently skipped. Th
 ### 9:00 AM CT Monday — Weekly Shift DMs
 
 The bot sends each linked cast member a DM covering their shifts for the coming 7 days. No check-in buttons are included — this is informational only.
+
+---
+
+### 9:00 PM CT Daily — EOD Coverage Summary
+
+If there are any unfilled coverage shifts or custom games, the bot sends a consolidated DM to the coverage manager. The summary lists every open item with the show, date/time, available cast members (by role for multi-role shows), and a direct link to each post. If nothing is outstanding, no DM is sent.
+
+---
+
+### Fillable Shift Detection (Real-time)
+
+When a cast member reacts ✅ to a coverage shift or custom game post, the bot checks whether coverage is now achievable:
+
+- For single-role shows: at least one ✅ reactor
+- For multi-role shows (MFB, Endings): at least one ✅ reactor per role
+
+When the threshold is met, the bot immediately DMs the coverage manager with the show, date/time, who's available (grouped by role for multi-role shows), and a link to the original post. This is the signal to go confirm coverage.
 
 ---
 
@@ -148,6 +168,8 @@ When anyone adds or removes a reaction on a meeting reminder or custom game post
 | Check-in alerts for a show | No alert channel set for that show (`/set-checkin-channel`) |
 | Shift DMs for a cast member | Member not linked via `/link-member` |
 | Check-in records for a cast member | Member not linked, or doesn't have the required show role |
+| EOD coverage summary | No coverage manager set (`/set-coverage-manager`) |
+| Fillable shift DMs | No coverage manager set (`/set-coverage-manager`) |
 
 ---
 
@@ -157,8 +179,9 @@ When anyone adds or removes a reaction on a meeting reminder or custom game post
 |---|---|
 | Bot startup | Startup DM to Allen, check-in seeding, alert timers set |
 | 12:05 AM CT | Check-in records seeded for the new day |
-| 8:00 AM CT | Meeting reminders + custom game 48h follow-ups |
+| 8:00 AM CT | Meeting reminders + custom game 48h follow-ups + coverage role pings |
 | 9:00 AM CT | Daily shift DMs with check-in buttons |
 | 9:00 AM CT (Monday only) | Weekly shift DMs |
+| 9:00 PM CT | EOD coverage summary DM to coverage manager (if anything is open) |
 | Call time (30 min before show) | No-show alert if cast member hasn't checked in |
-| Anytime | DM forwarding, RSVP tracker updates |
+| Anytime | Fillable shift DMs, DM forwarding, RSVP tracker updates |

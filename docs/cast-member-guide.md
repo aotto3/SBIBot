@@ -93,26 +93,26 @@ These shows have two actors per show, each with their own coverage channel. You 
 
 The bot posts a message in the coverage channel showing your show, the dates/times you need covered, and instructions for other cast members to react.
 
-Each post ends with a **Coverage Request ID** (e.g. `_Coverage Request ID: 12_`). Save this number — you'll need it if you want to cancel the request later.
+Each individual shift post shows a **Shift ID** at the bottom (e.g. `_Coverage Request ID: 12_`). If you request multiple dates, each date gets its own post with its own ID. Save these numbers — you'll need them if you want to cancel a specific shift later.
 
 ---
 
 ## 4. Cancelling a Coverage Request
 
-Use `/cancel-coverage-request` to remove a coverage request you no longer need.
+Use `/cancel-coverage-request` to cancel a shift you no longer need covered.
 
 **How to use it:**
 
-1. Find the **Coverage Request ID** at the bottom of your original coverage post.
-2. Type `/cancel-coverage-request request_id:[number]` — replacing `[number]` with your ID.
+1. Find the **Shift ID** at the bottom of the specific shift post you want to cancel.
+2. Type `/cancel-coverage-request request_id:[number]` — replacing `[number]` with that ID.
 
 **What happens:**
 
-The bot deletes the coverage post(s) from the channel and marks the request as cancelled. You'll get a private confirmation message.
+The shift post is updated to show it's cancelled (it stays in the channel so the history is preserved). If it was the last open shift in your request, the header post is also updated. You'll receive a private confirmation message.
 
-> ✅ Coverage request `12` cancelled and post(s) deleted.
+> ✅ Shift `12` cancelled.
 
-**Note:** You can only cancel your own requests. If you need an admin to cancel one for you, ask them to run the same command.
+**Note:** You can only cancel your own requests. If you need an admin to cancel one for you, ask them to run the same command or use the cancel button in `/open-coverage`.
 
 ---
 
@@ -124,7 +124,7 @@ When a cast member posts a coverage request, you'll see it in the show's coverag
 - **React ❌** if you're unavailable
 - **React ❓** if you're unsure
 
-Reacting ✅ lets the person requesting coverage (and the production team) see who's available. Once coverage is confirmed, the post will be updated automatically.
+Reacting ✅ lets the person requesting coverage (and the production team) see who's available. Once coverage is confirmed by an admin, the post will be updated to show it's covered.
 
 ---
 
