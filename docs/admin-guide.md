@@ -13,7 +13,8 @@ Assumes you have **Manage Server** permission. All bot replies are ephemeral (pr
 5. [Coverage Requests](#5-coverage-requests)
 6. [Check-in Monitoring](#6-check-in-monitoring)
 7. [Bot Settings](#7-bot-settings)
-8. [Command Reference](#8-command-reference)
+8. [Cleanup](#8-cleanup)
+9. [Command Reference](#9-command-reference)
 
 ---
 
@@ -33,6 +34,9 @@ Use `/set-coverage-channel` to tell the bot where to post coverage requests for 
 | The Endings | `Endings` | Yes — `HR` and `Author` (run twice) |
 | Great Gold Bird | `GGB` | No |
 | Lucidity | `Lucidity` | No |
+
+**Set coverage manager**
+Use `/set-coverage-manager` to designate who receives fillable-shift DMs and the nightly EOD coverage summary. Typically the person responsible for confirming coverage.
 
 **Set check-in alert channels**
 Use `/set-checkin-channel` for each check-in eligible show (GGB, Lucidity, The Endings). This is the channel where no-show alerts fire when a cast member misses their call time.
@@ -99,17 +103,48 @@ Options:
 
 ## 5. Coverage Requests
 
+### Custom Games
+
 **`/custom-game show:X date:X channel:#X`**
 Posts a custom game availability check to a channel of your choice. The post gets reactions cast members can use to signal availability. The bot replies with a Game ID.
 
 **`/cancel-custom-game game_id:N`**
-Deletes the original post and closes the game. Get the ID from the post or from the bot reply when it was created.
+Cancels the custom game and deletes its post. Get the ID from the post or the bot reply when it was created.
+
+### Coverage Requests
+
+Coverage requests are posted by cast members via `/coverage-request`. Each requested date/time becomes its own **shift post** with a unique Shift ID shown at the bottom. Multi-date requests also get a shared **header post** above all the shift posts.
+
+**`/cancel-coverage-request request_id:N`**
+Cancels a single shift by its Shift ID. The shift post is updated to show it's cancelled rather than deleted — the channel history is preserved. If it was the last remaining shift in the request, the header post is updated to reflect that everything has been resolved. The requester or any admin can run this command.
+
+### Confirming Coverage
+
+When someone reacts ✅ to a shift post and enough people are available, the bot DMs the coverage manager. At that point you can confirm who is taking the shift.
+
+**From the coverage channel:** Click the **Confirm Coverage** button at the bottom of the shift post. A private dropdown appears listing everyone who reacted ✅. Select the person taking the shift and submit. The bot posts a public confirmation message and grays out the button.
+
+**From `/open-coverage`:** Same flow — the Confirm button on each item opens the same dropdown.
+
+For multi-role shows (MFB, The Endings), a dropdown appears for each role. Select one person per role, then click **Confirm**.
+
+### Managing All Open Requests
+
+**`/open-coverage`**
+Lists every open coverage shift and custom game in one private view, with **Cancel** and **Confirm** buttons next to each item. Each item includes a link to the original post and the relevant ID.
+
+Use this to get a quick summary of everything outstanding, or to confirm/cancel without hunting through channels.
+
+### Channel Configuration
 
 **`/set-coverage-channel`**
 Configure where coverage requests post. See [First-Time Setup](#1-first-time-setup) for the full breakdown.
 
 **`/list-coverage-channels`**
 Shows the current channel assignment for every show/character.
+
+**`/set-coverage-manager`**
+Set who receives fillable-shift DMs and the nightly EOD coverage summary.
 
 ---
 
@@ -139,7 +174,21 @@ Toggle automated shift DMs:
 
 ---
 
-## 8. Command Reference
+## 8. Cleanup
+
+**`/purge type:X id:N`**
+Hard-deletes a record and its associated Discord post(s). Use when something went wrong and you need a clean slate. This is permanent and cannot be undone.
+
+| Type | What it deletes |
+|---|---|
+| `Coverage Shift` | The shift post and DB row. If it was the only shift in its request, also removes the header post and parent request. |
+| `Custom Game` | The game post and DB row. |
+
+If the Discord post was already manually deleted, the purge still cleans up the DB record.
+
+---
+
+## 9. Command Reference
 
 | Command | What it does |
 |---|---|
@@ -161,9 +210,13 @@ Toggle automated shift DMs:
 | `/send-shift-reminders` | Manually trigger shift DMs |
 | **Coverage** | |
 | `/custom-game` | Post a custom game availability check |
-| `/cancel-custom-game` | Delete a custom game post |
+| `/cancel-custom-game` | Cancel a custom game and delete its post |
+| `/coverage-request` | (Cast member) Submit a coverage request |
+| `/cancel-coverage-request` | Cancel a single coverage shift by Shift ID |
+| `/open-coverage` | View and manage all open requests and games |
 | `/set-coverage-channel` | Set the coverage channel for a show/character |
 | `/list-coverage-channels` | List all configured coverage channels |
+| `/set-coverage-manager` | Set who receives fillable DMs and EOD summary |
 | **Check-in** | |
 | `/checkin-status` | View check-in records for the last 3 days |
 | `/force-checkin` | Manually confirm a cast member as checked in |
@@ -174,3 +227,5 @@ Toggle automated shift DMs:
 | **Bot Settings** | |
 | `/bot-config` | Toggle automated shift DMs on or off |
 | `/set-error-channel` | Set the channel for bot error messages |
+| **Cleanup** | |
+| `/purge` | Hard-delete a coverage shift or custom game record and its post |
