@@ -23,6 +23,7 @@ const {
   buildEodDM,
   buildConfirmationMessage,
   planMissingRolePings,
+  planShiftCancel,
 } = require('../lib/coverage');
 
 // ─── parseShiftInput ──────────────────────────────────────────────────────────
@@ -392,4 +393,44 @@ test('planMissingRolePings — multi-role game returns only missing roles', () =
 
 test('planMissingRolePings — empty inputs return empty array', () => {
   assert.deepEqual(planMissingRolePings([], []), []);
+});
+
+// ─── planShiftCancel ──────────────────────────────────────────────────────────
+
+const baseRequest = {
+  id: 10,
+  header_message_id: 'MSG_1',
+  show: 'GGB',
+  requester_name: 'Alice',
+  character: null,
+};
+
+test('planShiftCancel — non-header shift with others remaining → delete-shift', () => {
+  const shift = { id: 1, shift_message_id: 'MSG_2', request_id: 10 };
+  const remaining = [{ id: 2, shift_message_id: 'MSG_3', status: 'open' }];
+  const result = planShiftCancel(shift, baseRequest, remaining);
+  assert.equal(result.action, 'delete-shift');
+  assert.equal(result.headerContent, undefined);
+});
+
+test('planShiftCancel — header shift with others remaining → edit-header', () => {
+  const shift = { id: 1, shift_message_id: 'MSG_1', request_id: 10 };
+  const remaining = [{ id: 2, shift_message_id: 'MSG_2', status: 'open' }];
+  const result = planShiftCancel(shift, baseRequest, remaining);
+  assert.equal(result.action, 'edit-header');
+  assert.ok(typeof result.headerContent === 'string', 'headerContent should be a string');
+  assert.ok(result.headerContent.includes('Alice'), 'headerContent should include requester name');
+  assert.ok(result.headerContent.includes('Great Gold Bird'), 'headerContent should include show label');
+});
+
+test('planShiftCancel — last open shift regardless of type → delete-all', () => {
+  const shift = { id: 1, shift_message_id: 'MSG_2', request_id: 10 };
+  const result = planShiftCancel(shift, baseRequest, []);
+  assert.equal(result.action, 'delete-all');
+});
+
+test('planShiftCancel — header shift that is also the last → delete-all', () => {
+  const shift = { id: 1, shift_message_id: 'MSG_1', request_id: 10 };
+  const result = planShiftCancel(shift, baseRequest, []);
+  assert.equal(result.action, 'delete-all');
 });
