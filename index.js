@@ -17,7 +17,7 @@ const checkin = require('./lib/checkin');
 const { showLabel } = require('./lib/shows');
 const utils   = require('./lib/utils');
 const { handleCoverageRequestModal } = require('./commands/coverage-request');
-const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit } = require('./lib/confirm');
+const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit, handleCovCancelButton } = require('./lib/confirm');
 const { openDMChannels } = require('./lib/dm-channels');
 const fs   = require('fs');
 const path = require('path');
@@ -230,6 +230,12 @@ client.on(Events.InteractionCreate, async interaction => {
   // Multi-role confirm submit button
   if (interaction.isButton() && interaction.customId.startsWith('cmr_submit:')) {
     try { await handleMultiRoleSubmit(interaction); } catch (err) { console.error('[confirm] Multi-role submit error:', err); }
+    return;
+  }
+
+  // Cancel button from /open-coverage
+  if (interaction.isButton() && interaction.customId.startsWith('cov_cancel:')) {
+    try { await handleCovCancelButton(interaction); } catch (err) { console.error('[confirm] Cancel button error:', err); }
     return;
   }
 
