@@ -16,7 +16,7 @@ node deploy-commands.js
 npm run deploy-commands
 ```
 
-There is no test suite or linter configured.
+**Tests:** `node --test test/coverage.test.js` and `node --test test/confirm.test.js` — pure-function tests using `node:test` + `node:assert/strict`. No linter configured.
 
 ## Environment Variables
 
@@ -47,6 +47,8 @@ Discord slash command
       → lib/bookeo.js      (HTTP to bookeo-asst, DM formatting, 5-min cache)
       → lib/shows.js       (show config: emojis, role mappings, tracker format)
       → lib/rsvp.js        (live RSVP tracker for both meeting and custom game posts)
+      → lib/coverage.js    (pure text-building functions for coverage posts and DMs)
+      → lib/confirm.js     (coverage confirm/cancel button handlers, multi-role flow)
       → lib/utils.js       (time/date parsing, recurrence logic, timezone helpers)
       → lib/checkin.js     (check-in seeding, alert scheduling, late check-in edits)
   → lib/scheduler.js       (node-cron jobs, started from index.js on ClientReady)
@@ -65,6 +67,8 @@ const { Routes } = require('discord-api-types/v10');  // ← correct
 ```
 
 **Ephemeral replies**: always use `flags: MessageFlags.Ephemeral` — never `ephemeral: true` (deprecated).
+
+**`GatewayIntentBits.GuildMembers` is a privileged intent** — enabled in both `index.js` and the Discord Developer Portal (Bot → Privileged Gateway Intents → Server Members Intent). Required for `interaction.guild.members.fetch()` to return all members. Without it, only cached members (those seen since startup) are available.
 
 **Timezone**: All cron schedules and "today" calculations use `America/Chicago`. Railway deploys run UTC; evening Houston time is already the next calendar day in UTC, which breaks date comparisons. Use `utils.todayCentral()` whenever you need today's date as a string — never `utils.toDateString(new Date())`. `utils.nextOccurrence()` also converts to Central time internally.
 
@@ -155,7 +159,34 @@ Set via `/set-coverage-channel`. For MFB and Endings, the `character` option is 
 
 **`/coverage-request`** — the `character` option is required for MFB and Endings (validated before the modal opens). Character is embedded in the modal `customId` as `coverage_request_modal:{SHOW}:{CHARACTER}` (empty string for single-role shows). Character is stored on the `coverage_requests` DB record.
 
-**`/cancel-coverage-request`** — takes the `request_id` (shift ID shown in the post as "Coverage Request ID"). The requester or any ManageGuild user can cancel. Deletes all shift messages for the request (gracefully skips already-deleted messages), then calls `db.markRequestCancelled()`. Works even if the request is already filled. Always replies ephemerally.
+**`/cancel-coverage-request`** — takes a single `request_id` (the Shift ID shown on the individual shift post). Cancels that one shift only — does NOT cancel the whole request. The requester or any ManageGuild user can cancel. Uses `planShiftCancel()` from `lib/coverage.js` to decide what to do with the Discord post:
+- `delete-all`: last open shift → edits shift post to "❌ Cancelled", edits header to resolved state
+- `edit-header`: cancelling the header+shift combined post while siblings remain → edits to header-only content + strikethrough cancelled note
+- `delete-shift`: non-header shift with siblings remaining → edits post to "❌ Cancelled — [date]"
+Posts are **never deleted** — always edited so the channel history is preserved.
+
+**`/open-coverage`** (ManageGuild only) — lists all open shifts and custom games in one ephemeral view, one message per item with Cancel and Confirm buttons. Links to original posts. Routes to the same `handleCovCancelButton` / `handleConfirmCoverageButton` handlers as in-channel buttons.
+
+**Coverage confirm flow** (`lib/confirm.js`):
+- Button custom ID: `confirm_coverage:{type}:{id}` — handled by `handleConfirmCoverageButton`
+- Fetches ✅ reactors from the **original post** (looked up via DB channel_id + message_id) — not `interaction.message`, so the button works from both the channel post and `/open-coverage`
+- Fallback when no reactors: `interaction.guild.members.fetch()` — requires `GatewayIntentBits.GuildMembers` (privileged intent, enabled in both code and Discord Developer Portal)
+- Single-role: shows a select menu of reactors; on submit (`confirm_coverage_select:{type}:{id}`) confirms in DB, posts public confirmation, disables button on original post
+- Multi-role (MFB, Endings): `handleMultiRoleButton` shows one select per role sorted by role-holders; `pendingMultiRole` Map (keyed `userId:gameId`) accumulates selections; `cmr_submit:{gameId}` finalizes
+- After confirming a shift: checks if all shifts in the request are resolved (open count = 0) and edits header to `buildResolvedHeaderPost()`
+
+**`planShiftCancel(shift, request, remainingOpenShifts)`** (pure, in `lib/coverage.js`) — returns `{ action, headerContent? }`:
+- `delete-all` — no siblings remain (edit everything to resolved/cancelled state)
+- `edit-header` — this shift IS the header post, siblings remain (edit to header-only + cancelled note)
+- `delete-shift` — non-header post, siblings remain (edit this post to cancelled state)
+
+**Cancel behavior — posts are edited, never deleted:**
+- Cancelled shift post: `❌ **Cancelled** — [date at time]`
+- Cancelled game post (from `/open-coverage`): prepend `❌ **Cancelled**\n\n` to existing content
+- Resolved header (all shifts done, mix of covered/cancelled): `buildResolvedHeaderPost()` → "All shifts in this request have been resolved."
+- `/cancel-custom-game` (the slash command) still deletes the game post — only the `/open-coverage` cancel button edits it
+
+**`/purge`** (ManageGuild only) — hard-deletes a record AND its Discord post(s). Use for bot cleanup. Types: `Coverage Shift` (also removes orphaned request if it was the last shift) and `Custom Game`. Post deletion failures are silently swallowed. DB rows are hard-deleted (not soft-cancelled).
 
 ### Check-in system
 
@@ -190,6 +221,11 @@ checkin: { roles: ['Mikey'], callTimeOffset: -30 }
 **`bot_config` keys used by check-in:**
 - `checkin_alert_channel_{SHOW}` (e.g. `checkin_alert_channel_GGB`) — Discord channel ID for no-show alerts, set via `/set-checkin-channel`
 - `checkin_contacts` — JSON-serialized array of Discord user IDs to ping on no-show alerts, managed via `/add-checkin-contact` and `/remove-checkin-contact`
+
+**`bot_config` keys used by coverage:**
+- `coverage_manager` — Discord user ID of the person who receives fillable-shift DMs and the 9pm EOD coverage summary, set via `/set-coverage-manager`
+- `coverage_channel_{SHOW}` (e.g. `coverage_channel_GGB`) — channel ID for single-role show coverage posts
+- `coverage_channel_{SHOW}_{CHARACTER}` (e.g. `coverage_channel_MFB_Daphne`) — channel ID for multi-role show coverage posts
 
 **One-time setup required:** `/set-checkin-channel` for each show (GGB, Lucidity, Endings) and `/add-checkin-contact` for each notification contact. Cast members must also be linked via `/link-member` (already required for shift DMs) — unlinked cast are skipped at seed time.
 
