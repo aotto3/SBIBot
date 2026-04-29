@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
-const db    = require('../lib/db');
-const utils = require('../lib/utils');
+const db       = require('../lib/db');
+const utils    = require('../lib/utils');
+const meetings = require('../lib/meetings');
 
 const DURATION_CHOICES = [
   { name: '30 minutes', value: 30  },
@@ -108,10 +109,17 @@ module.exports = {
       return interaction.editReply('No changes provided — include at least one field to update.');
     }
 
+    const oldChannelId = meeting.channel_id;
     db.updateMeeting(meetingId, updates);
+    const updatedMeeting = db.getMeeting(meetingId);
+
+    const editedCount = await meetings.editMeetingPosts(interaction.client, updatedMeeting, oldChannelId);
+    const postNote = editedCount > 0
+      ? `_${editedCount} existing reminder post${editedCount === 1 ? '' : 's'} updated._`
+      : '_No existing reminder posts found to update._';
 
     await interaction.editReply(
-      `✅ **Meeting \`${meetingId}\` updated:**\n${changes.join('\n')}\n\n_Existing reminder posts are not edited. Future reminders will use the updated details._`
+      `✅ **Meeting \`${meetingId}\` updated:**\n${changes.join('\n')}\n\n${postNote}`
     );
   },
 };
