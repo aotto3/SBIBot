@@ -83,11 +83,39 @@ const { Routes } = require('discord-api-types/v10');  // ← correct
 ### Meeting reminders
 
 Three reminder types exist:
-- `'created'` — posted immediately when a meeting is scheduled (dayLabel: "just scheduled")
-- `'7d'` — posted by the daily 8am cron when a meeting is 7 days away
-- `'24h'` — posted by the daily 8am cron when a meeting is 1 day away
+- `'created'` — posted immediately when a meeting is scheduled. Includes full RSVP reactions (✅ ❌ ❓) and a live tracker. Its Discord message ID is stored in `meeting_reminders_sent` so follow-up reminders can link back to it.
+- `'7d'` — posted by the daily 8am cron when a meeting is 7 days away. No RSVP reactions — links back to the original post and @mentions current ✅/❓ reactors.
+- `'24h'` — same format as `'7d'`, fired 1 day before the meeting.
 
-The `meeting_reminders_sent` table prevents duplicate posts (keyed on `meeting_id + instance_date + reminder_type`). For recurring meetings, `instance_date` is the specific occurrence's date.
+The `meeting_reminders_sent` table prevents duplicate posts (keyed on `meeting_id + instance_date + reminder_type`). All three types are stored — the schema comment saying `'7d' | '24h'` is outdated; `'created'` rows are also written. For recurring meetings, `instance_date` is the specific occurrence's date.
+
+**7d/24h follow-up format:**
+```
+📅 **Title** — Friday, May 14, 2026, 7:00 PM – 9:00 PM
+_is in 7 days_
+
+Attending (so far): @Alice @Bob
+
+RSVP on the original post: https://discord.com/channels/...
+
+📅 [Add to Google Calendar](<URL>)
+_Meeting ID: 5_
+```
+- "Attending (so far):" is omitted if nobody has RSVP'd ✅ or ❓.
+- If the original post can't be fetched (deleted, or predates this feature), the link becomes `_(original post unavailable)_` with no @ mentions.
+- No @here/@everyone ping — the attendee mentions serve as the notification.
+
+**`lib/meetings.js` key functions:**
+- `buildMeetingReminderContent` — builds the 'created' post content
+- `buildFollowupReminderContent(meeting, instanceDate, reminderType, attendeeMentions, originalUrl)` — pure function for 7d/24h content
+- `buildCancelledPostContent(meeting, instanceDate)` — builds the cancelled header for a 'created' post edit
+- `fetchAttendeeIds(message)` — returns ✅/❓ reactor user IDs from a Discord message, excluding bots
+- `db.getCreatedReminderRecord(meetingId, instanceDate)` — looks up the stored 'created' row for a given occurrence
+
+**Meeting cancellation** (`/cancel-meeting`):
+- Marks the meeting inactive in the DB
+- Edits all existing 'created' Discord posts for that meeting to show strikethrough title + `_This meeting has been cancelled._`, preserving any RSVP tracker section beneath the `TRACKER_MARKER`
+- Posts a new cancellation notice linking to the most recent 'created' post (link omitted if no DB record exists)
 
 Meeting posts always show start–end time (e.g. "7:00 PM – 9:00 PM") and a Google Calendar link. The `_Meeting ID: N_` line at the bottom lets users find the ID without running `/meetings`.
 
