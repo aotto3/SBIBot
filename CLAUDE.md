@@ -31,6 +31,18 @@ Required in `.env` (locally) or Railway environment variables (production):
 | `BOOKEO_API_KEY` | API key for bookeo-asst `/api/schedule` — sent as `X-Api-Key` header |
 | `DB_PATH` | SQLite file path — defaults to `../db.sqlite` relative to `lib/`. On Railway, set to `/data/db.sqlite` |
 
+## Editing .docx files
+
+**Always use Node.js script files for XML edits** — never sed, awk, or perl on XML. Bash tools operate line-by-line and can silently corrupt or wipe a file when patterns span multiple lines or land inside an open element. Pattern: write a `.js` file to the project root, run it with `node`, delete it when done.
+
+**Get the Windows path before passing it to Node** — bash's `/tmp` resolves to `C:\Users\Allen\AppData\Local\Temp` on this machine, but Python and Node (native Windows binaries) can't resolve the Cygwin-style path. Always run `cygpath -w /tmp/your-dir` first and use the result in any Node script.
+
+**Confirm the replacement target is unique before replacing** — run `grep -c 'your-pattern' file` and only proceed if it returns exactly `1`. Zero or two-plus matches mean the pattern is wrong; don't guess.
+
+**Always use `--validate false` when calling pack.py** — the validator crashes on a cp1252/Unicode print bug in this Windows environment. The XML itself is still validated by xmllint inside the pack step; the flag only skips the broken paragraph-count comparison.
+
+---
+
 ## Architecture
 
 ### Two-system design
