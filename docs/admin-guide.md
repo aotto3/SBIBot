@@ -75,11 +75,15 @@ Both default to a 1-hour duration and send 7-day and 24-hour reminders. You can 
 
 If you choose `Specific members` as the target, the bot tells you to run `/meeting-add-member` to build the list — do that before the first reminder fires.
 
+**How reminders work**
+
+The initial "just scheduled" post is the only one with RSVP reactions (✅ ❌ ❓). The 7-day and 24-hour follow-up reminders @mention anyone who has already RSVP'd ✅ or ❓, and link back to the original post. Cast members only need to RSVP once.
+
 **Managing existing meetings**
 
 - `/meetings` — lists all active meetings with their IDs. You'll need the ID for every other meeting command.
-- `/edit-meeting meeting_id:N` — change any combination of title, date (one-time only), time, duration, or channel. Existing posted reminders are not edited; changes apply to future reminders.
-- `/cancel-meeting meeting_id:N` — deactivates the meeting and posts a cancellation notice to the meeting channel.
+- `/edit-meeting meeting_id:N` — change any combination of title, date (one-time only), time, duration, or channel. Any 7-day and 24-hour reminder posts that have already been sent are updated with the new details and a refreshed attendee list.
+- `/cancel-meeting meeting_id:N` — deactivates the meeting, edits the original reminder post to show the meeting is cancelled (with strikethrough title), and posts a cancellation notice in the channel with a link back to the original post.
 - `/attendance meeting_id:N` — shows RSVP counts and names for the most recent reminder. Add `date:YYYY-MM-DD` for a specific occurrence.
 - `/meeting-add-member meeting_id:N user:@User` — adds a member to a `Specific members`-targeted meeting.
 

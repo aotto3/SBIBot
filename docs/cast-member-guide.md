@@ -6,15 +6,32 @@ SBI Bot is the Discord bot that handles scheduling, check-ins, and shift coverag
 
 ## Table of Contents
 
-1. [Checking In for Your Shift](#1-checking-in-for-your-shift)
-2. [Viewing Your Schedule](#2-viewing-your-schedule)
-3. [Requesting Shift Coverage](#3-requesting-shift-coverage)
-4. [Cancelling a Coverage Request](#4-cancelling-a-coverage-request)
-5. [Responding to Someone Else's Coverage Request](#5-responding-to-someone-elses-coverage-request)
+1. [Meeting Reminders & RSVPs](#1-meeting-reminders--rsvps)
+2. [Checking In for Your Shift](#2-checking-in-for-your-shift)
+3. [Viewing Your Schedule](#3-viewing-your-schedule)
+4. [Requesting Shift Coverage](#4-requesting-shift-coverage)
+5. [Cancelling a Coverage Request](#5-cancelling-a-coverage-request)
+6. [Responding to Someone Else's Coverage Request](#6-responding-to-someone-elses-coverage-request)
 
 ---
 
-## 1. Checking In for Your Shift
+## 1. Meeting Reminders & RSVPs
+
+When a meeting is scheduled, the bot posts an announcement in the meeting channel with RSVP reactions:
+
+- **✅** — You're attending
+- **❌** — You can't make it
+- **❓** — Maybe
+
+React on that original post to RSVP. **You only need to RSVP once** — the original post is the single place your response is tracked.
+
+As the meeting gets closer, the bot will post follow-up reminders (7 days out and 24 hours out). These will @mention you if you've already said ✅ or ❓, and include a link back to the original post so you can update your response if your availability changes. The follow-up reminders don't have their own reactions — just use the link to go back to the original.
+
+If a meeting is cancelled, the original post will be updated to show it's cancelled and a new cancellation notice will appear in the channel.
+
+---
+
+## 2. Checking In for Your Shift
 
 Use `/check-in` to confirm you're ready for your show.
 
@@ -33,7 +50,7 @@ The bot's reply is private (only you can see it).
 
 ---
 
-## 2. Viewing Your Schedule
+## 3. Viewing Your Schedule
 
 Use `/member-schedule` to see upcoming shifts.
 
@@ -64,7 +81,7 @@ You can also look up a teammate's schedule the same way — just use their name 
 
 ---
 
-## 3. Requesting Shift Coverage
+## 4. Requesting Shift Coverage
 
 Use `/coverage-request` when you need someone to cover one or more of your shifts.
 
@@ -97,7 +114,7 @@ Each individual shift post shows a **Shift ID** at the bottom (e.g. `_Coverage R
 
 ---
 
-## 4. Cancelling a Coverage Request
+## 5. Cancelling a Coverage Request
 
 Use `/cancel-coverage-request` to cancel a shift you no longer need covered.
 
@@ -116,7 +133,7 @@ The shift post is updated to show it's cancelled (it stays in the channel so the
 
 ---
 
-## 5. Responding to Someone Else's Coverage Request
+## 6. Responding to Someone Else's Coverage Request
 
 When a cast member posts a coverage request, you'll see it in the show's coverage channel. Here's how to respond:
 

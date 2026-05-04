@@ -77,7 +77,7 @@ The bot seeds check-in records for the new day and schedules alert timers. This 
 Each morning at 8am, the bot runs three checks:
 
 **Meeting reminders**
-Scans all active meetings. If a meeting is exactly 7 days away or 1 day away, the bot posts a reminder in the configured channel. The reminder includes the meeting title, date/time, duration, a Google Calendar link, and RSVP reactions (✅ ❌ ❓). Each reminder is only ever posted once — the bot tracks what's already been sent.
+Scans all active meetings. If a meeting is exactly 7 days away or 1 day away, the bot posts a follow-up reminder in the configured channel. Unlike the original "just scheduled" post (which has RSVP reactions), these reminders @mention everyone who has already reacted ✅ or ❓ on the original post and include a link back to it. No new reactions are added — cast members RSVP once on the original post. Each reminder is only ever posted once — the bot tracks what's already been sent.
 
 **Custom game 48-hour follow-up**
 Scans all open custom game posts older than 48 hours that haven't received a follow-up yet. For posts that still need coverage:
@@ -155,7 +155,9 @@ Any DM sent to the bot by someone other than Allen is automatically forwarded to
 
 ### RSVP Tracking (Real-time)
 
-When anyone adds or removes a reaction on a meeting reminder or custom game post, the bot updates the RSVP tracker section of that post in place. No manual refresh needed.
+When anyone adds or removes a reaction on a meeting post or custom game post, the bot updates the RSVP tracker section of that post in place. No manual refresh needed.
+
+For meetings, RSVP tracking only applies to the original "just scheduled" post — the 7-day and 24-hour follow-up reminders have no reactions of their own.
 
 ---
 
