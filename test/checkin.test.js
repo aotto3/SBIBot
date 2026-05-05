@@ -221,3 +221,25 @@ test('addCheckinContact — no duplicates', () => {
   const contacts = db.getCheckinContacts().filter(id => id === 'dupUser');
   assert.equal(contacts.length, 1);
 });
+
+// ─── Coverage ping exclusions ─────────────────────────────────────────────────
+
+test('getCoveragePingExclusions — returns empty array when none configured', () => {
+  assert.deepEqual(db.getCoveragePingExclusions(), []);
+});
+
+test('addCoveragePingExclusion / removeCoveragePingExclusion — round trip', () => {
+  db.addCoveragePingExclusion('userA');
+  db.addCoveragePingExclusion('userB');
+  assert.deepEqual(db.getCoveragePingExclusions(), ['userA', 'userB']);
+
+  db.removeCoveragePingExclusion('userA');
+  assert.deepEqual(db.getCoveragePingExclusions(), ['userB']);
+});
+
+test('addCoveragePingExclusion — no duplicates', () => {
+  db.addCoveragePingExclusion('dupExclude');
+  db.addCoveragePingExclusion('dupExclude');
+  const hits = db.getCoveragePingExclusions().filter(id => id === 'dupExclude');
+  assert.equal(hits.length, 1);
+});
