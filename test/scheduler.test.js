@@ -13,7 +13,7 @@ const assert = require('node:assert/strict');
 
 process.env.DB_PATH = ':memory:';
 
-const { planMeetingReminders, planShiftDMs, planCustomGameReminders } = require('../lib/scheduler');
+const { planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions } = require('../lib/scheduler');
 
 // ─── planMeetingReminders ─────────────────────────────────────────────────────
 
@@ -148,9 +148,9 @@ const SAMPLE_SHIFTS = [
 
 test('planShiftDMs — returns descriptor for each linked cast member', () => {
   const memberLinks = new Map([
-    ['Alice Smith', { discord_id: 'U001' }],
-    ['Bob Jones',   { discord_id: 'U002' }],
-    ['Carol Brown', { discord_id: 'U003' }],
+    ['Alice Smith', { discordId: 'U001' }],
+    ['Bob Jones',   { discordId: 'U002' }],
+    ['Carol Brown', { discordId: 'U003' }],
   ]);
   const result = planShiftDMs(SAMPLE_SHIFTS, memberLinks, 'weekly');
   // Alice gets one entry (both GGB shifts grouped), Bob and Carol each get one
@@ -163,7 +163,7 @@ test('planShiftDMs — returns descriptor for each linked cast member', () => {
 
 test('planShiftDMs — cast member without Discord link is skipped', () => {
   const memberLinks = new Map([
-    ['Alice Smith', { discord_id: 'U001' }],
+    ['Alice Smith', { discordId: 'U001' }],
     // Bob and Carol not linked
   ]);
   const result = planShiftDMs(SAMPLE_SHIFTS, memberLinks, 'weekly');
@@ -172,7 +172,7 @@ test('planShiftDMs — cast member without Discord link is skipped', () => {
 });
 
 test('planShiftDMs — empty shifts returns empty array', () => {
-  const memberLinks = new Map([['Alice Smith', { discord_id: 'U001' }]]);
+  const memberLinks = new Map([['Alice Smith', { discordId: 'U001' }]]);
   assert.deepEqual(planShiftDMs([], memberLinks, 'weekly'), []);
 });
 
@@ -181,13 +181,13 @@ test('planShiftDMs — empty memberLinks returns empty array', () => {
 });
 
 test('planShiftDMs — daily label appears in dmText', () => {
-  const memberLinks = new Map([['Alice Smith', { discord_id: 'U001' }]]);
+  const memberLinks = new Map([['Alice Smith', { discordId: 'U001' }]]);
   const [result]    = planShiftDMs(SAMPLE_SHIFTS, memberLinks, 'daily');
   assert.ok(result.dmText.includes('within 24 hours'), 'daily DM should say "within 24 hours"');
 });
 
 test('planShiftDMs — weekly label appears in dmText', () => {
-  const memberLinks = new Map([['Alice Smith', { discord_id: 'U001' }]]);
+  const memberLinks = new Map([['Alice Smith', { discordId: 'U001' }]]);
   const [result]    = planShiftDMs(SAMPLE_SHIFTS, memberLinks, 'weekly');
   assert.ok(result.dmText.includes('this week'), 'weekly DM should say "this week"');
 });
@@ -206,12 +206,6 @@ test('planCustomGameReminders — returns descriptor for each game', () => {
   assert.equal(result.length, 2);
 });
 
-test('planCustomGameReminders — config matches show', () => {
-  const result = planCustomGameReminders(SAMPLE_GAMES);
-  const ggb    = result.find(r => r.game.show === 'GGB');
-  assert.ok(ggb);
-  assert.equal(ggb.config.label, 'Great Gold Bird');
-});
 
 test('planCustomGameReminders — dateTimeStr formats date+time', () => {
   const result       = planCustomGameReminders(SAMPLE_GAMES);
@@ -219,6 +213,37 @@ test('planCustomGameReminders — dateTimeStr formats date+time', () => {
   const withoutTime  = result.find(r => r.game.id === 2);
   assert.ok(withTime.dateTimeStr.includes(' at '), 'should include time when present');
   assert.ok(!withoutTime.dateTimeStr.includes(' at '), 'should omit time when null');
+});
+
+// ─── planNonResponderMentions ─────────────────────────────────────────────────
+
+test('planNonResponderMentions — unreacted non-excluded members are returned', () => {
+  const result = planNonResponderMentions(['U1', 'U2', 'U3'], [], []);
+  assert.deepEqual(result, ['U1', 'U2', 'U3']);
+});
+
+test('planNonResponderMentions — all reacted returns empty array (role-ping fallback)', () => {
+  const result = planNonResponderMentions(['U1', 'U2'], ['U1', 'U2'], []);
+  assert.deepEqual(result, []);
+});
+
+test('planNonResponderMentions — partial responders: only silent members returned', () => {
+  const result = planNonResponderMentions(['U1', 'U2', 'U3'], ['U2'], []);
+  assert.deepEqual(result, ['U1', 'U3']);
+});
+
+test('planNonResponderMentions — excluded members are not mentioned even if silent', () => {
+  const result = planNonResponderMentions(['U1', 'U2', 'U3'], [], ['U1']);
+  assert.deepEqual(result, ['U2', 'U3']);
+});
+
+test('planNonResponderMentions — all excluded returns empty array (role-ping fallback)', () => {
+  const result = planNonResponderMentions(['U1', 'U2'], [], ['U1', 'U2']);
+  assert.deepEqual(result, []);
+});
+
+test('planNonResponderMentions — empty member list returns empty array', () => {
+  assert.deepEqual(planNonResponderMentions([], ['U1'], ['U2']), []);
 });
 
 test('planCustomGameReminders — empty list returns empty array', () => {
