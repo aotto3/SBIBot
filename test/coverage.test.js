@@ -24,6 +24,7 @@ const {
   buildConfirmationMessage,
   planMissingRolePings,
   planShiftCancel,
+  analyzeCoverage,
 } = require('../lib/coverage');
 
 // ─── parseShiftInput ──────────────────────────────────────────────────────────
@@ -433,4 +434,70 @@ test('planShiftCancel — header shift that is also the last → delete-all', ()
   const shift = { id: 1, shift_message_id: 'MSG_1', request_id: 10 };
   const result = planShiftCancel(shift, baseRequest, []);
   assert.equal(result.action, 'delete-all');
+});
+
+// ─── analyzeCoverage ──────────────────────────────────────────────────────────
+
+// Minimal guild stub for multi-role shows.
+// getShowRole calls guild.members.fetch(userId) then member.roles.cache.some(fn).
+function makeGuild(userRoleMap) {
+  return {
+    members: {
+      fetch: async id => ({
+        roles: { cache: { some: fn => (userRoleMap[id] ?? []).some(name => fn({ name })) } },
+      }),
+    },
+  };
+}
+
+test('analyzeCoverage — multi-role show, all roles covered → isFilled true, availableByRole keyed by role', async () => {
+  const guild = makeGuild({ U1: ['Daphne'], U2: ['Houdini'] });
+  const yesUsers = new Map([
+    ['U1', { id: 'U1', displayName: 'Alice', username: 'alice' }],
+    ['U2', { id: 'U2', displayName: 'Bob',   username: 'bob'   }],
+  ]);
+  const result = await analyzeCoverage(guild, yesUsers, 'MFB');
+  assert.equal(result.isFilled, true,    'both roles covered → filled');
+  assert.equal(result.showType, 'multi', 'MFB is multi-role');
+  assert.deepEqual(result.missingRoles, [], 'no missing roles');
+  assert.ok(!Array.isArray(result.availableByRole), 'availableByRole should be an object');
+  assert.ok(result.availableByRole.Daphne.includes('Alice'),  'Daphne slot has Alice');
+  assert.ok(result.availableByRole.Houdini.includes('Bob'),   'Houdini slot has Bob');
+});
+
+test('analyzeCoverage — multi-role show, one role missing → isFilled false, missingRoles lists it', async () => {
+  const guild = makeGuild({ U1: ['Daphne'] }); // no Houdini
+  const yesUsers = new Map([
+    ['U1', { id: 'U1', displayName: 'Alice', username: 'alice' }],
+  ]);
+  const result = await analyzeCoverage(guild, yesUsers, 'MFB');
+  assert.equal(result.isFilled, false, 'Houdini uncovered → not filled');
+  assert.ok(result.missingRoles.includes('Houdini'), 'Houdini should be in missingRoles');
+  assert.ok(!result.missingRoles.includes('Daphne'), 'Daphne is covered — not missing');
+});
+
+test('analyzeCoverage — character param forces single-role path on multi-role show', async () => {
+  // MFB is normally multi-role, but a coverage shift for a specific character is single-role
+  const yesUsers = new Map([['U1', { id: 'U1', displayName: 'Alice', username: 'alice' }]]);
+  const result = await analyzeCoverage(null, yesUsers, 'MFB', 'Daphne');
+  assert.equal(result.isFilled,  true,     'any reactor fills a single-character shift');
+  assert.equal(result.showType,  'single', 'character param forces single-role path');
+  assert.deepEqual(result.missingRoles, [], 'no missing roles');
+  assert.ok(Array.isArray(result.availableByRole), 'availableByRole is flat array');
+});
+
+test('analyzeCoverage — single-role show, no reactors → isFilled false', async () => {
+  const result = await analyzeCoverage(null, new Map(), 'GGB');
+  assert.equal(result.isFilled, false, 'should not be filled');
+  assert.deepEqual(result.availableByRole, [], 'no names');
+});
+
+test('analyzeCoverage — single-role show, one reactor → isFilled true, showType single', async () => {
+  const yesUsers = new Map([['U1', { id: 'U1', displayName: 'Alice', username: 'alice' }]]);
+  const result = await analyzeCoverage(null, yesUsers, 'GGB');
+  assert.equal(result.isFilled,  true,     'should be filled');
+  assert.equal(result.showType,  'single', 'should be single-role');
+  assert.deepEqual(result.missingRoles, [], 'no missing roles for single-role show');
+  assert.ok(Array.isArray(result.availableByRole), 'availableByRole should be an array');
+  assert.ok(result.availableByRole.includes('Alice'), 'should include reactor name');
 });

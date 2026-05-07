@@ -5,7 +5,7 @@ See RULES.md for operational rules with feedback tracking.
 ## Commands
 - Start: `node index.js` / `npm start`
 - Register commands: `node deploy-commands.js` / `npm run deploy-commands` — re-run on any add/rename/option change
-- Tests: `npm test` (runs all `test/*.test.js` — 5 files)
+- Tests: `npm test` (runs all `test/*.test.js` — 7 files)
 
 ## Env vars
 DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID, BOOKEO_API_URL, BOOKEO_API_KEY
@@ -18,7 +18,7 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - `pack.py`: always `--validate false` (validator crashes on cp1252/Unicode bug on this machine)
 
 ## Architecture
-`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,confirm,utils,checkin,scheduler}.js`
+`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,coverage-session,confirm,utils,checkin,scheduler}.js`
 
 - SQLite: `node:sqlite` (Node 24 built-in) — NOT `better-sqlite3` (native compile fails on Railway)
 - Commands: guild-scoped (instant). Re-run `deploy-commands.js` on any change.
@@ -61,8 +61,9 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - `/coverage-request`: character required when `showCharacters(show)` is non-null (MFB/Endings); `customId: coverage_request_modal:{SHOW}:{CHARACTER}`
 - Posts always edited, never deleted (exception: `/cancel-custom-game` slash cmd deletes; `/open-coverage` button edits)
 - `planShiftCancel` → `delete-all` | `edit-header` | `delete-shift`
+- `analyzeCoverage(guild, yesUsers, showKey, character?)` in `coverage.js` → `{ isFilled, missingRoles, availableByRole, showType }` — single source of truth for fill detection; used by `rsvp.js`, `scheduler.js`
 - Confirm button: `confirm_coverage:{type}:{id}` → original message fetched via DB (channel+messageID) → reactions fetched from Discord
-- Multi-role confirm: `handleMultiRoleButton` → `pendingMultiRole Map(userId:gameId)` → `cmr_submit:{gameId}`
+- Multi-role confirm: `handleMultiRoleButton` → `coverage-session.js` (`setMultiRoleSelection` per dropdown) → `cmr_submit:{gameId}` → `planMultiRoleConfirm` → execute
 - After confirm: if all request shifts resolved → `buildResolvedHeaderPost()`
 - `/purge` (ManageGuild): hard-deletes `Coverage Shift` or `Custom Game` + post
 
