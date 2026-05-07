@@ -15,6 +15,7 @@ const assert = require('node:assert/strict');
 process.env.DB_PATH = ':memory:';
 
 const { isEligibleForCheckin, groupEligibleShifts, shiftCallTimeUnix } = require('../lib/checkin');
+const { showKeys, hasCheckin, checkinConfig } = require('../lib/shows');
 const db = require('../lib/db');
 
 // ─── isEligibleForCheckin ─────────────────────────────────────────────────────
@@ -100,6 +101,39 @@ test('groupEligibleShifts — out-of-order times still picks earliest', () => {
   const groups = groupEligibleShifts(shifts);
   assert.equal(groups.length, 1);
   assert.equal(groups[0].showTime, '2:00 PM');
+});
+
+// ─── _seedRecords null guard — invariant tests ───────────────────────────────
+//
+// The null guard added after `checkinConfig(show)` in _seedRecords protects
+// against a config inconsistency where isEligibleForCheckin passes but
+// checkinConfig returns null — causing showConfig.roles.some() to crash and
+// abort seeding for the entire remaining group list.
+//
+// That inconsistency cannot be produced in normal operation: validateShows()
+// throws at require() time for malformed SHOWS entries, and isEligibleForCheckin
+// uses hasCheckin() which checks the same SHOWS[key].checkin property that
+// checkinConfig() reads. The tests below verify this invariant holds, so a
+// future change that breaks it will be caught here before hitting the guard
+// at 9am.
+
+test('shows invariant: every show where hasCheckin is true has a non-null checkinConfig', () => {
+  for (const key of showKeys()) {
+    if (hasCheckin(key)) {
+      const cfg = checkinConfig(key);
+      assert.ok(cfg !== null, `${key}: hasCheckin is true but checkinConfig returned null`);
+      assert.ok(Array.isArray(cfg.roles) && cfg.roles.length > 0,
+        `${key}: checkinConfig.roles must be a non-empty array`);
+      assert.equal(typeof cfg.callTimeOffset, 'number',
+        `${key}: checkinConfig.callTimeOffset must be a number`);
+    }
+  }
+});
+
+test('shows invariant: MFB is not eligible for checkin and has no config', () => {
+  assert.equal(hasCheckin('MFB'), false);
+  assert.equal(checkinConfig('MFB'), null);
+  assert.equal(isEligibleForCheckin({ show: 'MFB', cast: ['Alice'] }), false);
 });
 
 // ─── shiftCallTimeUnix ────────────────────────────────────────────────────────
