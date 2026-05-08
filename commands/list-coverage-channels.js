@@ -1,45 +1,58 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const cfg = require('../lib/config');
-const { showKeys, showLabel, showCharacters, showPrefix, showAutoRole } = require('../lib/shows');
+const { showKeys, showLabel, showCharacters, showPrefix, showAutoRole, hasCheckin } = require('../lib/shows');
+
+function resolveDisplay(guild, overrideId, autoName) {
+  if (overrideId) {
+    const ch = guild.channels.cache.get(overrideId);
+    return ch ? `override: <#${overrideId}>` : `override: _(ID ${overrideId} not found)_`;
+  }
+  const ch = guild.channels.cache.find(c => c.name === autoName);
+  return ch ? `auto: <#${ch.id}>` : `auto: _(#${autoName} not found)_`;
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('list-coverage-channels')
-    .setDescription('Show coverage request channel routing for each show')
+    .setDescription('Show channel routing for coverage, check-in alerts, and custom games')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const guild = interaction.guild;
-    const lines = [];
+    const sections = [];
 
     for (const showKey of showKeys()) {
-      const chars = showCharacters(showKey);
+      const chars  = showCharacters(showKey);
       const prefix = showPrefix(showKey);
+      const label  = showLabel(showKey);
+      const lines  = [`**${label}**`];
+
+      // Coverage requests — one row per character/role
       const entries = chars
         ? chars.map(character => ({ character, slug: character.toLowerCase() }))
         : [{ character: null, slug: showAutoRole(showKey)?.toLowerCase() }];
 
       for (const { character, slug } of entries) {
-        const label      = character ? `**${showLabel(showKey)} — ${character}**` : `**${showLabel(showKey)}**`;
+        const rowLabel   = character ? `  Coverage (${character})` : '  Coverage';
         const overrideId = cfg.getCoverageChannelId(showKey, character);
-
-        if (overrideId) {
-          const ch = guild.channels.cache.get(overrideId);
-          const chStr = ch ? `<#${overrideId}>` : `_(override ID ${overrideId} not found)_`;
-          lines.push(`${label} — override: ${chStr}`);
-        } else {
-          const autoName = `${prefix}-${slug}`;
-          const ch = guild.channels.cache.find(c => c.name === autoName);
-          const chStr = ch ? `<#${ch.id}>` : `_(channel \`#${autoName}\` not found)_`;
-          lines.push(`${label} — auto: ${chStr}`);
-        }
+        lines.push(`${rowLabel}: ${resolveDisplay(guild, overrideId, `${prefix}-${slug}`)}`);
       }
+
+      // Custom game
+      lines.push(`  Custom game: ${resolveDisplay(guild, cfg.getCustomGameChannelId(showKey), `${prefix}-times`)}`);
+
+      // Check-in alerts (only shows that have check-in configured)
+      if (hasCheckin(showKey)) {
+        lines.push(`  Check-in alerts: ${resolveDisplay(guild, cfg.getCheckinAlertChannelId(showKey), `${prefix}-times`)}`);
+      }
+
+      sections.push(lines.join('\n'));
     }
 
     await interaction.editReply({
-      content: `**Coverage request channels:**\n${lines.join('\n')}`,
+      content: sections.join('\n\n'),
     });
   },
 };
