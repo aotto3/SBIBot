@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const db                    = require('../lib/db');
 const { buildConfirmButton } = require('../lib/confirm');
 const utils                 = require('../lib/utils');
@@ -20,12 +20,6 @@ module.exports = {
         .setDescription('Date of the custom game (e.g. April 20, 4/20, 2026-04-20)')
         .setRequired(true)
     )
-    .addChannelOption(opt =>
-      opt.setName('channel')
-        .setDescription('Channel to post in')
-        .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
-    )
     .addStringOption(opt =>
       opt.setName('time')
         .setDescription('Time of the custom game (e.g. 7pm, 7:30pm, 19:00) — optional')
@@ -38,7 +32,6 @@ module.exports = {
     const showKey   = interaction.options.getString('show');
     const dateStr   = interaction.options.getString('date');
     const timeStr   = interaction.options.getString('time') ?? null;
-    const channel   = interaction.options.getChannel('channel');
     const guild     = interaction.guild;
 
     const parsedDate = utils.parseDate(dateStr);
@@ -62,9 +55,17 @@ module.exports = {
       ? `${dateDisplay} at ${utils.formatTime(parsedTime)}`
       : dateDisplay;
 
+    // ── Resolve channel ───────────────────────────────────────────────────────
+    let targetChannel;
+    try {
+      targetChannel = await utils.resolveCustomGameChannel(guild, showKey);
+    } catch (err) {
+      return interaction.editReply(`❌ Could not find channel for **${showLabel(showKey)}**: ${err.message}`);
+    }
+
     // ── Create DB record first to get the game ID ─────────────────────────────
     const id = db.createCustomGame({
-      channel_id:   channel.id,
+      channel_id:   targetChannel.id,
       show:         showKey,
       date:         parsedDate,
       time:         parsedTime,
@@ -89,13 +90,6 @@ module.exports = {
     const content = lines.join('\n');
 
     // ── Post and react ────────────────────────────────────────────────────────
-    let targetChannel;
-    try {
-      targetChannel = await interaction.client.channels.fetch(channel.id);
-    } catch (err) {
-      return interaction.editReply(`Couldn't access <#${channel.id}>: ${err.message}`);
-    }
-
     const msg = await targetChannel.send({ content, components: [buildConfirmButton(false, 'game', id)] });
 
     for (const emoji of emojis) {
@@ -104,7 +98,7 @@ module.exports = {
 
     db.setCustomGameMessageId(id, msg.id);
 
-    await interaction.editReply(`✅ Posted availability check for **${showLabel(showKey)}** on ${dateTimeDisplay} in <#${channel.id}>. (Game ID: \`${id}\`)`);
+    await interaction.editReply(`✅ Posted availability check for **${showLabel(showKey)}** on ${dateTimeDisplay} in <#${targetChannel.id}>. (Game ID: \`${id}\`)`);
   },
 };
 
