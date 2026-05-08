@@ -1,26 +1,39 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const cfg = require('../lib/config');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 
+const TYPE_CHOICES = [
+  { name: 'Coverage Requests',     value: 'coverage'     },
+  { name: 'Check-in Alerts',       value: 'checkin'      },
+  { name: 'Custom Game Requests',  value: 'custom-game'  },
+];
+
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('set-coverage-channel')
-    .setDescription('Set the channel where coverage requests for a show are posted')
+    .setName('set-channel-override')
+    .setDescription('Override the auto-resolved channel for a show (e.g. redirect to #test)')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(opt =>
+      opt.setName('type')
+        .setDescription('Which channel type to override')
+        .setRequired(true)
+        .addChoices(...TYPE_CHOICES)
+    )
+    .addStringOption(opt =>
       opt.setName('show')
-        .setDescription('Which show to configure')
+        .setDescription('Which show')
         .setRequired(true)
         .addChoices(...SHOW_CHOICES)
     )
     .addChannelOption(opt =>
       opt.setName('channel')
-        .setDescription('Channel to post coverage requests in')
+        .setDescription('Channel to redirect to')
+        .addChannelTypes(ChannelType.GuildText)
         .setRequired(true)
     )
     .addStringOption(opt =>
       opt.setName('character')
-        .setDescription('Character to configure (required for MFB and The Endings)')
+        .setDescription('Character (required when type=coverage for MFB/Endings)')
         .setRequired(false)
         .setAutocomplete(true)
     ),
@@ -38,12 +51,13 @@ module.exports = {
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+    const type      = interaction.options.getString('type');
     const show      = interaction.options.getString('show');
     const channel   = interaction.options.getChannel('channel');
     const character = interaction.options.getString('character');
     const chars     = showCharacters(show);
 
-    if (chars) {
+    if (type === 'coverage' && chars) {
       if (!character) {
         await interaction.editReply({
           content: `❌ **${showLabel(show)}** has multiple characters (${chars.join(', ')}). Please specify a character.`,
@@ -56,15 +70,23 @@ module.exports = {
         });
         return;
       }
-      cfg.setCoverageChannelId(show, character, channel.id);
-      await interaction.editReply({
-        content: `✅ Coverage request channel for **${showLabel(show)} — ${character}** set to <#${channel.id}>.`,
-      });
-    } else {
-      cfg.setCoverageChannelId(show, null, channel.id);
-      await interaction.editReply({
-        content: `✅ Coverage request channel for **${showLabel(show)}** set to <#${channel.id}>.`,
-      });
     }
+
+    switch (type) {
+      case 'coverage':
+        cfg.setCoverageChannelId(show, character ?? null, channel.id);
+        break;
+      case 'checkin':
+        cfg.setCheckinAlertChannelId(show, channel.id);
+        break;
+      case 'custom-game':
+        cfg.setCustomGameChannelId(show, channel.id);
+        break;
+    }
+
+    const label = character ? `${showLabel(show)} — ${character}` : showLabel(show);
+    await interaction.editReply({
+      content: `✅ **${label}** ${type} channel overridden → <#${channel.id}>.\nRun \`/clear-channel-override\` to revert to auto-resolve.`,
+    });
   },
 };

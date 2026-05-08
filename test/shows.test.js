@@ -16,6 +16,8 @@ const {
   getDiscordRoleName,
   allEmojisForShow,
   validateShows,
+  showPrefix,
+  showKeys,
 } = require('../lib/shows');
 
 // ─── _requireShow (exercised via public accessors) ────────────────────────────
@@ -85,6 +87,7 @@ test('checkinConfig — unknown key throws', () => {
 const baseValid = {
   TESTSHOW: {
     label: 'Test Show',
+    prefix: 'test',
     autoRole: null,
     discordRoles: null,
     emojis: {
@@ -151,4 +154,30 @@ test('validateShows — passes for show with valid checkin block', () => {
     },
   };
   assert.doesNotThrow(() => validateShows(good));
+});
+
+test('validateShows — throws when prefix is missing', () => {
+  const bad = { TESTSHOW: { ...baseValid.TESTSHOW, prefix: undefined } };
+  assert.throws(() => validateShows(bad), /missing required field "prefix"/);
+});
+
+// ─── showPrefix ───────────────────────────────────────────────────────────────
+
+test('showPrefix — every show has a non-empty string prefix', () => {
+  for (const key of showKeys()) {
+    const prefix = showPrefix(key);
+    assert.equal(typeof prefix, 'string', `${key} prefix should be a string`);
+    assert.ok(prefix.length > 0, `${key} prefix should be non-empty`);
+  }
+});
+
+test('showPrefix — known prefixes match convention', () => {
+  assert.equal(showPrefix('MFB'),      'mfb');
+  assert.equal(showPrefix('GGB'),      'ggb');
+  assert.equal(showPrefix('Endings'),  'endings');
+  assert.equal(showPrefix('Lucidity'), 'lucidity');
+});
+
+test('showPrefix — unknown key throws', () => {
+  assert.throws(() => showPrefix('NOPE'), /Unknown show key/);
 });
