@@ -7,7 +7,6 @@ const {
   MessageFlags,
 } = require('discord.js');
 const db = require('../lib/db');
-const cfg = require('../lib/config');
 const members = require('../lib/members');
 const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
 const { parseShiftInput, buildHeaderPost, buildShiftPost } = require('../lib/coverage');
@@ -113,17 +112,7 @@ async function handleCoverageRequestModal(interaction) {
     return;
   }
 
-  // 2. Check coverage channel is configured
-  const channelId  = cfg.getCoverageChannelId(show, character);
-  if (!channelId) {
-    const target = character ? `**${showLabel(show)} — ${character}**` : `**${showLabel(show)}**`;
-    await interaction.editReply({
-      content: `❌ No coverage channel configured for ${target}. Ask an admin to run \`/set-coverage-channel\`.`,
-    });
-    return;
-  }
-
-  // 3. Duplicate check — any parsed shift already has an open request?
+  // 2. Duplicate check — any parsed shift already has an open request?
   const dupMatches = parsedShifts
     .map(s => ({ shift: s, existing: db.getOpenShiftByShowAndDateTime(show, s.date, s.time) }))
     .filter(({ existing }) => existing);
@@ -146,6 +135,16 @@ async function handleCoverageRequestModal(interaction) {
     return;
   }
 
+  // 3. Resolve channel (throws + logs to error channel if not found)
+  let channel;
+  try {
+    channel = await utils.resolveCoverageChannel(interaction.guild, show, character);
+  } catch (err) {
+    const target = character ? `**${showLabel(show)} — ${character}**` : `**${showLabel(show)}**`;
+    await interaction.editReply({ content: `❌ Could not find coverage channel for ${target}: ${err.message}` });
+    return;
+  }
+
   // 4. Create DB records
   const requesterName = members.getDisplayName(interaction.user.id, interaction.member?.displayName ?? interaction.user.displayName ?? interaction.user.username);
   const requestId = db.createCoverageRequest({
@@ -153,7 +152,7 @@ async function handleCoverageRequestModal(interaction) {
     requester_name: requesterName,
     show,
     character,
-    channel_id:     channelId,
+    channel_id:     channel.id,
   });
 
   const request = db.getCoverageRequest(requestId);
@@ -163,9 +162,7 @@ async function handleCoverageRequestModal(interaction) {
   );
   const shifts = shiftIds.map(id => db.getCoverageShiftById(id));
 
-  // 5. Fetch channel and post messages
-  const channel = await interaction.client.channels.fetch(channelId);
-
+  // 5. Post messages
   // First message: header paired with first shift
   const headerText    = buildHeaderPost(request, shifts);
   const firstShiftLine = buildShiftPost(request, shifts[0]);
@@ -184,7 +181,7 @@ async function handleCoverageRequestModal(interaction) {
 
   const shiftWord = shifts.length === 1 ? 'shift' : 'shifts';
   await interaction.editReply({
-    content: `✅ Coverage request posted to <#${channelId}> for ${shifts.length} ${shiftWord}.`,
+    content: `✅ Coverage request posted to <#${channel.id}> for ${shifts.length} ${shiftWord}.`,
   });
 
   console.log(`[coverage] ${interaction.user.tag} posted coverage request ${requestId} for ${show} (${shifts.length} shift(s))`);
