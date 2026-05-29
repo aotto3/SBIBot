@@ -21,6 +21,7 @@ const {
   buildResolvedHeaderPost,
   buildFillableDM,
   buildEodDM,
+  buildAllRespondedDM,
   buildConfirmationMessage,
   planMissingRolePings,
   planShiftCancel,
@@ -500,4 +501,53 @@ test('analyzeCoverage — single-role show, one reactor → isFilled true, showT
   assert.deepEqual(result.missingRoles, [], 'no missing roles for single-role show');
   assert.ok(Array.isArray(result.availableByRole), 'availableByRole should be an array');
   assert.ok(result.availableByRole.includes('Alice'), 'should include reactor name');
+});
+
+// ─── buildAllRespondedDM ──────────────────────────────────────────────────────
+
+test('buildAllRespondedDM — manager variant contains show, role, date, and swings suggestion', () => {
+  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'manager');
+  assert.ok(dm.includes('Great Gold Bird'), 'should include show label');
+  assert.ok(dm.includes('Friday, May 30 at 7:00pm'), 'should include date/time');
+  assert.ok(dm.includes('Mikey'), 'should include role name');
+  assert.ok(dm.includes('none are available'), 'should state no availability');
+  assert.ok(dm.includes('swings'), 'should suggest swings');
+  assert.ok(dm.includes('https://discord.com/link'), 'should include post link');
+});
+
+test('buildAllRespondedDM — requester variant adds cast manager escalation line', () => {
+  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'requester');
+  assert.ok(dm.includes('your coverage request'), 'should reference requester ownership');
+  assert.ok(dm.includes('cast manager'), 'should mention cast manager as escalation');
+  assert.ok(dm.includes('swings'), 'should suggest swings');
+});
+
+test('buildAllRespondedDM — manager variant does NOT include cast manager escalation line', () => {
+  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'manager');
+  assert.ok(!dm.includes('cast manager'), 'manager DM should not reference cast manager');
+});
+
+test('buildAllRespondedDM — maybeNames present: both variants include possible-availability line with names', () => {
+  const dmManager   = buildAllRespondedDM(['Mikey'], 'GGB', 'date', 'link', 'manager',   ['Alice', 'Bob']);
+  const dmRequester = buildAllRespondedDM(['Mikey'], 'GGB', 'date', 'link', 'requester', ['Alice', 'Bob']);
+  for (const dm of [dmManager, dmRequester]) {
+    assert.ok(dm.includes('possible availability'), 'should include possible-availability phrase');
+    assert.ok(dm.includes('Alice'), 'should include first name');
+    assert.ok(dm.includes('Bob'),   'should include second name');
+  }
+});
+
+test('buildAllRespondedDM — maybeNames empty: neither variant includes possible-availability line', () => {
+  const dmManager   = buildAllRespondedDM(['Mikey'], 'GGB', 'date', 'link', 'manager',   []);
+  const dmRequester = buildAllRespondedDM(['Mikey'], 'GGB', 'date', 'link', 'requester', []);
+  for (const dm of [dmManager, dmRequester]) {
+    assert.ok(!dm.includes('possible availability'), 'should not include possible-availability phrase');
+  }
+});
+
+test('buildAllRespondedDM — multi-role exhaustedRoles renders both role names', () => {
+  const dm = buildAllRespondedDM(['Daphne', 'Houdini'], 'MFB', 'date', 'link', 'manager');
+  assert.ok(dm.includes('Daphne'), 'should include Daphne');
+  assert.ok(dm.includes('Houdini'), 'should include Houdini');
+  assert.ok(!dm.includes('the **Daphne** role\n'), 'should not use singular phrasing for multi-role');
 });

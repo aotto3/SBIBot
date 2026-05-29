@@ -536,3 +536,197 @@ test('runEodCoverageReminder — manager set but no unconfirmed items: sendDM no
   await runEodCoverageReminder(discord);
   assert.equal(dmsSent.length, 0, 'no unconfirmed items → sendDM should not be called');
 });
+
+// ─── runCoverageRolePings — all-responded alert ───────────────────────────────
+
+test('runCoverageRolePings — all responded, none available: DMs sent, no channel ping', async () => {
+  cleanDb();
+  db.setConfig('coverage_manager', 'manager-id-1');
+
+  const REQUESTER_ID = 'user-requester-a';
+  const MEMBER_ID    = 'user-member-a';
+  const MSG_ID       = 'msg-all-responded-1';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-a', {
+    id: 'role-mikey-a', name: 'Mikey',
+    members: new Map([[MEMBER_ID, {}]]),
+  });
+
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  // Member reacted with a decline — has responded but no yes
+  const fakeReaction = {
+    emoji: { name: 'x_emoji' },
+    users: { fetch: async () => new Map([[MEMBER_ID, { id: MEMBER_ID }]]) },
+  };
+  channel._fakeMessage.reactions.cache.set('x_emoji', fakeReaction);
+
+  const sent = [];
+  const dms  = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:       async () => channel,
+    fetchMessage:       async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    fetchGuildRoles:    async () => {},
+    fetchGuildMembers:  async () => {},
+    sendMessage: async (_ch, content) => sent.push(content),
+    sendDM:      async (userId, content) => dms.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+
+  assert.equal(sent.length, 0, 'no channel ping should be sent');
+  assert.equal(dms.length,  2, 'requester and manager should each get a DM');
+  assert.ok(dms.some(d => d.userId === REQUESTER_ID),    'requester DM sent');
+  assert.ok(dms.some(d => d.userId === 'manager-id-1'),  'manager DM sent');
+  assert.ok(dms.find(d => d.userId === REQUESTER_ID).content.includes('cast manager'), 'requester DM mentions cast manager');
+  assert.ok(dms.find(d => d.userId === 'manager-id-1').content.includes('swings'),    'manager DM mentions swings');
+});
+
+test('runCoverageRolePings — all-responded alert not re-sent when flag already set', async () => {
+  cleanDb();
+  db.setConfig('coverage_manager', 'manager-id-2');
+
+  const REQUESTER_ID = 'user-requester-b';
+  const MEMBER_ID    = 'user-member-b';
+  const MSG_ID       = 'msg-all-responded-2';
+
+  const { shiftId } = insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+  db.markAllRespondedAlertSent(shiftId);
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-b', {
+    id: 'role-mikey-b', name: 'Mikey',
+    members: new Map([[MEMBER_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  const fakeReaction = { emoji: { name: 'x_emoji' }, users: { fetch: async () => new Map([[MEMBER_ID, { id: MEMBER_ID }]]) } };
+  channel._fakeMessage.reactions.cache.set('x_emoji', fakeReaction);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel: async () => channel, fetchMessage: async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    fetchGuildRoles: async () => {}, fetchGuildMembers: async () => {},
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+  assert.equal(dms.length, 0, 'DMs must not re-fire when flag is already set');
+});
+
+test('runCoverageRolePings — no manager configured: only requester DM sent', async () => {
+  cleanDb();
+  // coverage_manager NOT set
+
+  const REQUESTER_ID = 'user-requester-c';
+  const MEMBER_ID    = 'user-member-c';
+  const MSG_ID       = 'msg-all-responded-3';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-c', {
+    id: 'role-mikey-c', name: 'Mikey',
+    members: new Map([[MEMBER_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  const fakeReaction = { emoji: { name: 'x_emoji' }, users: { fetch: async () => new Map([[MEMBER_ID, { id: MEMBER_ID }]]) } };
+  channel._fakeMessage.reactions.cache.set('x_emoji', fakeReaction);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel: async () => channel, fetchMessage: async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    fetchGuildRoles: async () => {}, fetchGuildMembers: async () => {},
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+  assert.equal(dms.length, 1, 'only requester DM when no manager configured');
+  assert.equal(dms[0].userId, REQUESTER_ID, 'DM goes to requester');
+});
+
+test('runCoverageRolePings — maybe-reactor display name appears in DM', async () => {
+  cleanDb();
+  db.setConfig('coverage_manager', 'manager-id-4');
+  db.linkMember('user-maybe-d', 'Dana Smith', 'Dana Smith');
+
+  const REQUESTER_ID = 'user-requester-d';
+  const MEMBER_ID    = 'user-member-d';
+  const MAYBE_ID     = 'user-maybe-d';
+  const MSG_ID       = 'msg-all-responded-4';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-d', {
+    id: 'role-mikey-d', name: 'Mikey',
+    members: new Map([[MEMBER_ID, {}], [MAYBE_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  // MEMBER_ID declined, MAYBE_ID responded with the GGB maybe emoji
+  const declineReaction = { emoji: { name: 'x_emoji' }, users: { fetch: async () => new Map([[MEMBER_ID, { id: MEMBER_ID }]]) } };
+  const maybeReaction   = { emoji: { name: '❓' },  users: { fetch: async () => new Map([[MAYBE_ID, { id: MAYBE_ID }]]) } };
+  channel._fakeMessage.reactions.cache.set('x_emoji', declineReaction);
+  channel._fakeMessage.reactions.cache.set('maybe',   maybeReaction);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel: async () => channel, fetchMessage: async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    fetchGuildRoles: async () => {}, fetchGuildMembers: async () => {},
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+
+  assert.equal(dms.length, 2, 'both requester and manager DM sent');
+  for (const dm of dms) {
+    assert.ok(dm.content.includes('Dana'),               'DM should include maybe-reactor first name');
+    assert.ok(dm.content.includes('possible availability'), 'DM should include possible-availability phrase');
+  }
+});
+
+test('runCoverageRolePings — no maybe-reactors: possible-availability line absent from DM', async () => {
+  cleanDb();
+  db.setConfig('coverage_manager', 'manager-id-6');
+
+  const REQUESTER_ID = 'user-requester-f';
+  const MEMBER_ID    = 'user-member-f';
+  const MSG_ID       = 'msg-all-responded-6';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-f', {
+    id: 'role-mikey-f', name: 'Mikey',
+    members: new Map([[MEMBER_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  // Only a decline reaction — no maybe
+  const declineReaction = { emoji: { name: 'x_emoji' }, users: { fetch: async () => new Map([[MEMBER_ID, { id: MEMBER_ID }]]) } };
+  channel._fakeMessage.reactions.cache.set('x_emoji', declineReaction);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel: async () => channel, fetchMessage: async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    fetchGuildRoles: async () => {}, fetchGuildMembers: async () => {},
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+
+  for (const dm of dms) {
+    assert.ok(!dm.content.includes('possible availability'), 'no maybe-reactors means no possible-availability line');
+  }
+});
