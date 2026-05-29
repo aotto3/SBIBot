@@ -52,9 +52,27 @@ test('session data survives a simulated fresh module read from the same DB', () 
   cleanSessions();
   setMultiRoleSelection('admin1', 77, 'HR', 'U-hr');
 
-  // Simulate what happens after a bot restart: reading directly from DB
+  // Verify the raw DB row is persisted (what a fresh process would find)
   const row = db.getConfirmationSession('admin1', 77);
-  assert.deepEqual(row, { HR: 'U-hr' });
+  assert.ok(row, 'row should exist in DB');
+  assert.deepEqual(JSON.parse(row.selections), { HR: 'U-hr' });
+  assert.ok(typeof row.updated_at === 'number', 'updated_at should be a timestamp');
+});
+
+test('getMultiRoleSelections returns undefined and cleans up expired session', () => {
+  cleanSessions();
+  setMultiRoleSelection('admin1', 91, 'Daphne', 'U1');
+
+  // Back-date updated_at to 31 minutes ago
+  db.db.prepare('UPDATE coverage_confirmation_sessions SET updated_at = ? WHERE user_id = ? AND game_id = ?')
+    .run(Math.floor(Date.now() / 1000) - 31 * 60, 'admin1', 91);
+
+  const result = getMultiRoleSelections('admin1', 91);
+  assert.equal(result, undefined, 'should return undefined for expired session');
+
+  // Row should be deleted as a side effect
+  const row = db.getConfirmationSession('admin1', 91);
+  assert.equal(row, undefined, 'expired row should be deleted');
 });
 
 test('deleteExpiredConfirmationSessions removes old sessions', () => {
