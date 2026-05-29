@@ -103,6 +103,20 @@ Options:
 - `preview:True` — shows what the DM would say without actually sending anything.
 - `week_of` — look at a specific week.
 
+### Late-Booking Notifications (automatic)
+
+When a show has no audience bookings at 8:48am, the bot monitors for last-minute bookings and alerts assigned cast as soon as possible — no admin action required.
+
+**How it works:**
+1. At 8:48am, the bot records any shows with zero bookings in the `late_booking_baseline` table.
+2. A timer is scheduled 110 minutes before each blank show's start time (bookings close 120 min before curtain).
+3. When the timer fires, the bot re-checks Bookeo and DMs every assigned cast member if the show now has bookings.
+4. If a show books after the timer already fired, it's caught at the next scheduled check for that day.
+
+**Restart recovery:** any unnotified baseline rows from today reschedule automatically on bot startup.
+
+There are no admin commands for late-booking notifications — the system is fully automatic once the bot is running.
+
 ---
 
 ## 5. Coverage Requests

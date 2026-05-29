@@ -1,6 +1,19 @@
 # SBI Bot — Cast Member Guide
 
-SBI Bot is the Discord bot that handles scheduling, check-ins, and shift coverage for the company. This guide covers everything a cast member needs to know to use it.
+Welcome to the SBI Bot! This bot lives right here in Discord and quietly handles a lot of the behind-the-scenes work for our shows — meeting reminders, shift check-ins, and coverage requests. You don't need any technical knowledge to use it. This guide covers everything you need to know as a cast member.
+
+---
+
+## How to Use Bot Commands
+
+The SBI Bot responds to **slash commands** — commands that start with a `/`. Here's how to use them:
+
+1. Click into any Discord channel and type `/`
+2. A menu will pop up showing available commands
+3. Click the one you want, or keep typing to search for it
+4. Fill in any fields that appear and press Enter
+
+> **Tip:** You only need a handful of commands — they're all listed in this guide.
 
 ---
 
@@ -17,25 +30,37 @@ SBI Bot is the Discord bot that handles scheduling, check-ins, and shift coverag
 
 ## 1. Meeting Reminders & RSVPs
 
+### What the bot does automatically
 When a meeting is scheduled, the bot posts an announcement in the meeting channel with RSVP reactions:
 
 - **✅** — You're attending
 - **❌** — You can't make it
 - **❓** — Maybe
 
-React on that original post to RSVP. **You only need to RSVP once** — the original post is the single place your response is tracked.
+As the meeting gets closer, the bot will post follow-up reminders (7 days out and 24 hours out). These will @mention you if you've already said ✅ or ❓, and include a link back to the original post so you can update your response if your availability changes. If a meeting is cancelled, the original post will be updated to show it's cancelled and a new cancellation notice will appear in the channel.
 
-As the meeting gets closer, the bot will post follow-up reminders (7 days out and 24 hours out). These will @mention you if you've already said ✅ or ❓, and include a link back to the original post so you can update your response if your availability changes. The follow-up reminders don't have their own reactions — just use the link to go back to the original.
+[SCREENSHOT: A meeting reminder post showing the date/time, RSVP emoji reactions, and the live attendance tracker below it]
 
-If a meeting is cancelled, the original post will be updated to show it's cancelled and a new cancellation notice will appear in the channel.
+### What you need to do
+React to the reminder post with one of the three emojis. **You only need to RSVP once** — the original post is the single place your response is tracked. The follow-up reminders don't have their own reactions — just use the link to go back to the original.
+
+You can change your response at any time — just remove your old reaction and add the new one.
 
 ---
 
 ## 2. Checking In for Your Shift
 
+### What the bot does automatically
+For shows with check-in enabled (GGB, Lucidity, and The Endings), the bot keeps an eye on call times. If you haven't checked in by your call time, an alert fires in your show's admin channel so the right people are notified.
+
+> **Note:** MFB does not use check-in.
+
+[SCREENSHOT: The /check-in response — either a confirmation message for a single show, or a dropdown menu to select from multiple shows]
+
+### What you need to do
 Use `/check-in` to confirm you're ready for your show.
 
-**When to do it:** Check in before your call time. If you haven't checked in by then, the production team will be notified automatically.
+**When to do it:** Check in before your call time.
 
 **How to use it:**
 
@@ -77,11 +102,24 @@ You must provide either `name` or `discord`, but not both.
   • The Endings — Saturday, May 16 at 5:30 PM (12 guests)
 ```
 
+[SCREENSHOT: The /member-schedule output showing a list of upcoming shifts for a cast member]
+
 You can also look up a teammate's schedule the same way — just use their name or @mention them.
 
 ---
 
 ## 4. Requesting Shift Coverage
+
+### What the bot does automatically
+Once you post a coverage request, the bot takes it from there:
+
+- Posts individual messages for each shift in your show's role channel (e.g. `#mfb-daphne`, `#ggb-mikey`, `#endings-hr`)
+- Sends daily reminders about open requests until they're filled
+- Notifies the coverage manager automatically when a shift is covered
+
+[SCREENSHOT: A coverage request post in a role channel, showing shift details and the react buttons]
+
+### What you need to do
 
 Use `/coverage-request` when you need someone to cover one or more of your shifts.
 

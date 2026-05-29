@@ -156,7 +156,7 @@ const doc = new Document({
     config: [{
       reference: 'bullets',
       levels: [{
-        level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
+        level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
         style: { paragraph: { indent: { left: 720, hanging: 360 } } },
       }],
     }],
@@ -173,7 +173,7 @@ const doc = new Document({
         children: [new Paragraph({
           alignment: AlignmentType.RIGHT,
           border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 1 } },
-          children: [new TextRun({ text: 'SBI Bot \u2014 Admin Guide', font: 'Arial', size: 20, color: '888888' })],
+          children: [new TextRun({ text: 'SBI Bot — Admin Guide', font: 'Arial', size: 20, color: '888888' })],
         })],
       }),
     },
@@ -215,19 +215,23 @@ const doc = new Document({
       spacer(80),
 
       h2('Set coverage channels'),
-      p([r('Use '), c('/set-coverage-channel'), r(' to set where coverage requests post. MFB and The Endings need a separate channel per character \u2014 run the command once per character.')]),
+      p([r('Use '), c('/set-coverage-channel'), r(' to set where coverage requests post. MFB and The Endings need a separate channel per character — run the command once per character.')]),
       spacer(80),
 
       simpleTable(
         ['Show', 'show value', 'character needed?'],
         [
-          ['The Man From Beyond', 'MFB',      'Yes \u2014 Daphne and Houdini (run twice)'],
-          ['The Endings',         'Endings',   'Yes \u2014 HR and Author (run twice)'],
+          ['The Man From Beyond', 'MFB',      'Yes — Daphne and Houdini (run twice)'],
+          ['The Endings',         'Endings',   'Yes — HR and Author (run twice)'],
           ['Great Gold Bird',     'GGB',       'No'],
           ['Lucidity',            'Lucidity',  'No'],
         ],
         [2800, 1800, 4760]
       ),
+      spacer(80),
+
+      h2('Set coverage manager'),
+      p([r('Use '), c('/set-coverage-manager'), r(' to designate who receives fillable-shift DMs and the nightly EOD coverage summary.')]),
       spacer(80),
 
       h2('Set check-in alert channels'),
@@ -248,8 +252,8 @@ const doc = new Document({
       p([c('/link-member discord:@User bookeo_name:FirstLast')]),
       p([r('Links a Discord user to their Bookeo display name. Must match exactly what Bookeo shows (e.g. '), c('Allen Otto'), r(').')]),
       spacer(80),
-      p([c('/unlink-member discord:@User'), r(' \u2014 removes a link.')]),
-      p([c('/list-members'), r(' \u2014 shows all current Discord \u2194 Bookeo pairs.')]),
+      p([c('/unlink-member discord:@User'), r(' — removes a link.')]),
+      p([c('/list-members'), r(' — shows all current Discord ↔ Bookeo pairs.')]),
 
       divider(),
 
@@ -257,43 +261,75 @@ const doc = new Document({
       h1('3. Meetings'),
 
       h2('Scheduling'),
-      bullet([c('/schedule-meeting'), r(' \u2014 one-time meeting. Requires title, date, time, channel, target.')]),
-      bullet([c('/schedule-recurring'), r(' \u2014 weekly or monthly. Add '), c('recurrence'), r(', '), c('day'), r(', and '), c('week'), r(' (monthly only).')]),
+      bullet([c('/schedule-meeting'), r(' — one-time meeting. Requires title, date, time, channel, target.')]),
+      bullet([c('/schedule-recurring'), r(' — weekly or monthly. Add '), c('recurrence'), r(', '), c('day'), r(', and '), c('week'), r(' (monthly only).')]),
       spacer(80),
       p([r('Target options: '), c('@everyone'), r(', '), c('@here'), r(', or '), c('Specific members'), r('. If you choose Specific members, run '), c('/meeting-add-member'), r(' before the first reminder fires. Both commands default to 1-hour duration with 7-day and 24-hour reminders enabled.')]),
+      spacer(80),
+      p([r('The initial post is the only one with RSVP reactions (✅ ❌ ❓). The 7-day and 24-hour reminders @mention anyone who has already RSVP’d ✅ or ❓, and link back to the original post.')]),
 
       spacer(100),
       h2('Managing existing meetings'),
-      bullet([c('/meetings'), r(' \u2014 lists all active meetings with IDs.')]),
-      bullet([c('/edit-meeting meeting_id:N'), r(' \u2014 change title, date (one-time only), time, duration, or channel. Future reminders use the new details; existing posts are not edited.')]),
-      bullet([c('/cancel-meeting meeting_id:N'), r(' \u2014 deactivates the meeting and posts a cancellation notice to the channel.')]),
-      bullet([c('/attendance meeting_id:N'), r(' \u2014 shows RSVP counts for the most recent reminder. Add '), c('date:YYYY-MM-DD'), r(' for a specific occurrence.')]),
-      bullet([c('/meeting-add-member meeting_id:N user:@User'), r(' \u2014 adds a member to a Specific Members meeting.')]),
+      bullet([c('/meetings'), r(' — lists all active meetings with IDs.')]),
+      bullet([c('/edit-meeting meeting_id:N'), r(' — change title, date (one-time only), time, duration, or channel. Existing reminder posts are updated with the new details.')]),
+      bullet([c('/cancel-meeting meeting_id:N'), r(' — deactivates the meeting and posts a cancellation notice to the channel.')]),
+      bullet([c('/attendance meeting_id:N'), r(' — shows RSVP counts for the most recent reminder. Add '), c('date:YYYY-MM-DD'), r(' for a specific occurrence.')]),
+      bullet([c('/meeting-add-member meeting_id:N user:@User'), r(' — adds a member to a Specific Members meeting.')]),
 
       divider(),
 
       // ── 4. Schedule & Shifts ──────────────────────────────────────────────
       h1('4. Schedule & Shift Reminders'),
-      bullet([c('/schedule'), r(' \u2014 shows the full week of Bookeo shifts. Add '), c('week_of'), r(' for a different week.')]),
-      bullet([c('/send-shift-reminders'), r(' \u2014 manually triggers shift DMs. Options: '), c('mode'), r(' (weekly or 24hr), '), c('user'), r(' (limit to one person), '), c('preview:True'), r(' (shows DM text without sending).')]),
+      bullet([c('/schedule'), r(' — shows the full week of Bookeo shifts. Add '), c('week_of'), r(' for a different week.')]),
+      bullet([c('/send-shift-reminders'), r(' — manually triggers shift DMs. Options: '), c('mode'), r(' (weekly or 24hr), '), c('user'), r(' (limit to one person), '), c('preview:True'), r(' (shows DM text without sending).')]),
+
+      spacer(120),
+      h2('Late-Booking Notifications (automatic)'),
+      p([r('When a show has no audience bookings at 8:48am, the bot monitors for last-minute bookings and DMs assigned cast as soon as possible — no admin action required.')]),
+      spacer(80),
+      bullet([r('At 8:48am, records any shows with zero bookings.')]),
+      bullet([r('Schedules a check 110 minutes before each blank show’s start time (bookings close 120 min before curtain).')]),
+      bullet([r('When the timer fires, re-checks Bookeo and DMs every assigned cast member if the show now has bookings.')]),
+      bullet([r('Restart recovery: unnotified baseline rows reschedule automatically on bot startup.')]),
 
       divider(),
 
       // ── 5. Coverage Requests ──────────────────────────────────────────────
       h1('5. Coverage Requests'),
-      bullet([c('/custom-game show:X date:X channel:#X'), r(' \u2014 posts a custom game availability check. The bot replies with a Game ID.')]),
-      bullet([c('/cancel-custom-game game_id:N'), r(' \u2014 deletes the post. Get the ID from the post itself.')]),
-      bullet([c('/set-coverage-channel'), r(' \u2014 configure where coverage requests go. See First-Time Setup.')]),
-      bullet([c('/list-coverage-channels'), r(' \u2014 shows current channel assignments for all shows.')]),
+
+      h2('Custom Games'),
+      bullet([c('/custom-game show:X date:X channel:#X'), r(' — posts a custom game availability check. The bot replies with a Game ID.')]),
+      bullet([c('/cancel-custom-game game_id:N'), r(' — cancels the game and deletes its post. Get the ID from the post itself.')]),
+
+      spacer(120),
+      h2('Coverage Requests'),
+      p([r('Coverage requests are posted by cast members via '), c('/coverage-request'), r('. Each requested date/time becomes its own shift post with a unique Shift ID at the bottom.')]),
+      spacer(80),
+      bullet([c('/cancel-coverage-request request_id:N'), r(' — cancels a single shift. The post updates to show it’s cancelled (not deleted). If it was the last shift, the header post is also updated.')]),
+      bullet([c('/open-coverage'), r(' — lists all open shifts and custom games in one private view, with Cancel and Confirm buttons next to each item.')]),
+
+      spacer(120),
+      h2('Confirming Coverage'),
+      p([r('When someone reacts ✅ and enough people are available, the bot DMs the coverage manager. To confirm:')]),
+      spacer(80),
+      p([b('From the coverage channel: '), r('click the '), b('Confirm Coverage'), r(' button on the shift post. A dropdown lists everyone who reacted ✅. Select the person taking the shift and submit.')]),
+      p([b('From /open-coverage: '), r('same flow — the Confirm button on each item opens the same dropdown.')]),
+      p([r('For multi-role shows (MFB, The Endings), a dropdown appears for each role. Select one person per role, then click Confirm.')]),
+
+      spacer(120),
+      h2('Channel Configuration'),
+      bullet([c('/set-coverage-channel'), r(' — configure where coverage requests post. See First-Time Setup.')]),
+      bullet([c('/list-coverage-channels'), r(' — shows current channel assignments for all shows.')]),
+      bullet([c('/set-coverage-manager'), r(' — set who receives fillable-shift DMs and the nightly EOD coverage summary.')]),
 
       divider(),
 
       // ── 6. Check-in Monitoring ────────────────────────────────────────────
       h1('6. Check-in Monitoring'),
-      p([r('The bot seeds check-in records from Bookeo each morning and fires alerts at call time for cast members who haven\u2019t checked in.')]),
+      p([r('The bot seeds check-in records from Bookeo each morning and fires alerts at call time for cast members who haven’t checked in.')]),
       spacer(80),
-      bullet([c('/checkin-status'), r(' \u2014 shows check-in records for the last 3 days. States: checked in, alert fired, missed (bug), or pending.')]),
-      bullet([c('/force-checkin user:@User'), r(' \u2014 manually marks a cast member as checked in. Add '), c('show:X'), r(' if they have multiple shifts today.')]),
+      bullet([c('/checkin-status'), r(' — shows check-in records for the last 3 days. States: checked in, alert fired, missed (bug), or pending.')]),
+      bullet([c('/force-checkin user:@User'), r(' — manually marks a cast member as checked in. Add '), c('show:X'), r(' if they have multiple shifts today.')]),
       spacer(80),
       p([b('Managing alert contacts: '), c('/add-checkin-contact'), r(', '), c('/remove-checkin-contact'), r(', '), c('/list-checkin-contacts'), r('.')]),
 
@@ -301,14 +337,32 @@ const doc = new Document({
 
       // ── 7. Bot Settings ───────────────────────────────────────────────────
       h1('7. Bot Settings'),
-      p([c('/bot-config setting:X value:On|Off'), r(' \u2014 toggle automated shift DMs.')]),
-      bullet([b('Weekly shift DMs'), r(' \u2014 Sunday DMs covering the next 7 days.')]),
-      bullet([b('Daily 24hr shift DMs'), r(' \u2014 morning DMs for shifts that day.')]),
+      p([c('/bot-config setting:X value:On|Off'), r(' — toggle automated shift DMs.')]),
+      bullet([b('Weekly shift DMs'), r(' — Sunday DMs covering the next 7 days.')]),
+      bullet([b('Daily 24hr shift DMs'), r(' — morning DMs for shifts that day.')]),
 
       divider(),
 
-      // ── 8. Command Reference ──────────────────────────────────────────────
-      h1('8. Command Reference'),
+      // ── 8. Cleanup ────────────────────────────────────────────────────────
+      h1('8. Cleanup'),
+      p([c('/purge type:X id:N'), r(' — hard-deletes a record and its Discord post(s). Use when something went wrong and you need a clean slate. '), b('This is permanent and cannot be undone.')]),
+      spacer(80),
+
+      simpleTable(
+        ['Type', 'What it deletes'],
+        [
+          ['Coverage Shift', 'The shift post and DB row. If it was the only shift in its request, also removes the header post and parent request.'],
+          ['Custom Game',    'The game post and DB row.'],
+        ],
+        [2800, 6560]
+      ),
+      spacer(80),
+      p([r('If the Discord post was already manually deleted, the purge still cleans up the DB record.')]),
+
+      divider(),
+
+      // ── 9. Command Reference ──────────────────────────────────────────────
+      h1('9. Command Reference'),
       spacer(80),
 
       commandTable([
@@ -317,7 +371,7 @@ const doc = new Document({
           commands: [
             ['/link-member',   'Link a Discord user to their Bookeo name'],
             ['/unlink-member', 'Remove a member link'],
-            ['/list-members',  'List all Discord \u2194 Bookeo links'],
+            ['/list-members',  'List all Discord ↔ Bookeo links'],
           ],
         },
         {
@@ -343,10 +397,14 @@ const doc = new Document({
         {
           heading: 'Coverage',
           commands: [
-            ['/custom-game',           'Post a custom game availability check'],
-            ['/cancel-custom-game',    'Delete a custom game post'],
-            ['/set-coverage-channel',  'Set the coverage channel for a show/character'],
-            ['/list-coverage-channels','List all configured coverage channels'],
+            ['/custom-game',            'Post a custom game availability check'],
+            ['/cancel-custom-game',     'Cancel a custom game and delete its post'],
+            ['/coverage-request',       '(Cast member) Submit a coverage request'],
+            ['/cancel-coverage-request','Cancel a single coverage shift by Shift ID'],
+            ['/open-coverage',          'View and manage all open requests and games'],
+            ['/set-coverage-channel',   'Set the coverage channel for a show/character'],
+            ['/list-coverage-channels', 'List all configured coverage channels'],
+            ['/set-coverage-manager',   'Set who receives fillable DMs and EOD summary'],
           ],
         },
         {
@@ -365,6 +423,12 @@ const doc = new Document({
           commands: [
             ['/bot-config',       'Toggle automated shift DMs on or off'],
             ['/set-error-channel','Set the channel for bot error messages'],
+          ],
+        },
+        {
+          heading: 'Cleanup',
+          commands: [
+            ['/purge', 'Hard-delete a coverage shift or custom game record and its post'],
           ],
         },
       ]),

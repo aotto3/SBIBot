@@ -155,7 +155,7 @@ const doc = new Document({
       {
         reference: 'bullets',
         levels: [{
-          level: 0, format: LevelFormat.BULLET, text: '\u2022', alignment: AlignmentType.LEFT,
+          level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
           style: { paragraph: { indent: { left: 720, hanging: 360 } } },
         }],
       },
@@ -180,6 +180,13 @@ const doc = new Document({
           style: { paragraph: { indent: { left: 720, hanging: 360 } } },
         }],
       },
+      {
+        reference: 'steps4',
+        levels: [{
+          level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT,
+          style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+        }],
+      },
     ],
   },
   sections: [{
@@ -194,7 +201,7 @@ const doc = new Document({
         children: [new Paragraph({
           alignment: AlignmentType.RIGHT,
           border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 1 } },
-          children: [new TextRun({ text: 'SBI Bot \u2014 Cast Member Guide', font: 'Arial', size: 20, color: '888888' })],
+          children: [new TextRun({ text: 'SBI Bot — Cast Member Guide', font: 'Arial', size: 20, color: '888888' })],
         })],
       }),
     },
@@ -224,48 +231,92 @@ const doc = new Document({
         children: [new TextRun({ text: 'Cast Member Guide', size: 32, font: 'Arial', color: '555555' })],
       }),
 
-      body([run('SBI Bot is the Discord bot that handles scheduling, check-ins, and shift coverage. This guide covers everything you need to use it.')]),
+      body([run('Welcome to the SBI Bot! This bot lives right here in Discord and quietly handles a lot of the behind-the-scenes work for our shows — meeting reminders, shift check-ins, and coverage requests. You don’t need any technical knowledge to use it. This guide covers everything you need to know as a cast member.')]),
 
       spacer(160),
       divider(),
 
+      // ── How to Use Bot Commands ───────────────────────────────────────────
+      heading1('How to Use Bot Commands'),
+      body([run('The SBI Bot responds to '), bold('slash commands'), run(' — commands that start with a '), code('/'), run('. Here’s how to use them:')]),
+      spacer(80),
+      numbered([run('Click into any Discord channel and type '), code('/')], 'steps'),
+      numbered([run('A menu will pop up showing available commands')], 'steps'),
+      numbered([run('Click the one you want, or keep typing to search for it')], 'steps'),
+      numbered([run('Fill in any fields that appear and press Enter')], 'steps'),
+      spacer(80),
+      callout([new TextRun({ text: 'Tip: You only need a handful of commands — they’re all listed in this guide.', font: 'Arial', size: 24, italics: true })]),
+
+      spacer(200),
+      divider(),
+
       // ── TOC ───────────────────────────────────────────────────────────────
       body([bold('In this guide:')]),
-      bullet([run('1. '), run('Checking In for Your Shift')]),
-      bullet([run('2. '), run('Viewing Your Schedule')]),
-      bullet([run('3. '), run('Requesting Shift Coverage')]),
-      bullet([run('4. '), run('Cancelling a Coverage Request')]),
-      bullet([run('5. '), run('Responding to Someone Else\u2019s Coverage Request')]),
+      bullet([run('1. '), run('Meeting Reminders & RSVPs')]),
+      bullet([run('2. '), run('Checking In for Your Shift')]),
+      bullet([run('3. '), run('Viewing Your Schedule')]),
+      bullet([run('4. '), run('Requesting Shift Coverage')]),
+      bullet([run('5. '), run('Cancelling a Coverage Request')]),
+      bullet([run('6. '), run('Responding to Someone Else’s Coverage Request')]),
 
       spacer(200),
       divider(),
       spacer(80),
 
-      // ── Section 1 ─────────────────────────────────────────────────────────
-      heading1('1. Checking In for Your Shift'),
-      body([run('Use '), code('/check-in'), run(' to confirm you\u2019re ready for your show.')]),
+      // ── Section 1: Meeting Reminders ──────────────────────────────────────
+      heading1('1. Meeting Reminders & RSVPs'),
+
+      heading2('What the bot does automatically'),
+      body([run('When a meeting is scheduled, the bot posts an announcement in the meeting channel with RSVP reactions:')]),
+      spacer(80),
+      bullet([bold('✅'), run(' — You’re attending')]),
+      bullet([bold('❌'), run(' — You can’t make it')]),
+      bullet([bold('❓'), run(' — Maybe')]),
+      spacer(80),
+      body([run('As the meeting gets closer, the bot will post follow-up reminders (7 days out and 24 hours out). These will @mention you if you’ve already said ✅ or ❓, and include a link back to the original post so you can update your response. If a meeting is cancelled, the original post will be updated and a cancellation notice will appear in the channel.')]),
+
+      spacer(120),
+      heading2('What you need to do'),
+      body([run('React to the reminder post with one of the three emojis. '), bold('You only need to RSVP once'), run(' — the original post is the single place your response is tracked. The follow-up reminders don’t have their own reactions — just use the link to go back to the original.')]),
+      spacer(80),
+      body([run('You can change your response at any time — just remove your old reaction and add the new one.')]),
+
+      spacer(200),
+      divider(),
       spacer(80),
 
-      body([bold('When to do it: '), run('Check in before your call time. If you haven\u2019t checked in by then, the production team will be notified automatically.')]),
+      // ── Section 2: Check-in ───────────────────────────────────────────────
+      heading1('2. Checking In for Your Shift'),
+
+      heading2('What the bot does automatically'),
+      body([run('For shows with check-in enabled (GGB, Lucidity, and The Endings), the bot keeps an eye on call times. If you haven’t checked in by your call time, an alert fires in your show’s admin channel so the right people are notified.')]),
+      spacer(80),
+      callout([new TextRun({ text: 'Note: MFB does not use check-in.', font: 'Arial', size: 24, italics: true })]),
+
+      spacer(120),
+      heading2('What you need to do'),
+      body([run('Use '), code('/check-in'), run(' to confirm you’re ready for your show.')]),
+      spacer(80),
+      body([bold('When to do it: '), run('Check in before your call time.')]),
       spacer(80),
 
       heading2('How to use it:'),
-      numbered([run('In any channel where the bot is active, type '), code('/check-in'), run(' and press Enter.')], 'steps'),
-      numbered([run('If you have one show today, the bot confirms you immediately.')], 'steps'),
-      numbered([run('If you have multiple shows today, the bot shows a dropdown \u2014 select which show you\u2019re checking in for.')], 'steps'),
+      numbered([run('In any channel where the bot is active, type '), code('/check-in'), run(' and press Enter.')], 'steps2'),
+      numbered([run('If you have one show today, the bot confirms you immediately.')], 'steps2'),
+      numbered([run('If you have multiple shows today, the bot shows a dropdown — select which show you’re checking in for.')], 'steps2'),
 
       spacer(120),
-      heading2('What you\u2019ll see:'),
-      callout([new TextRun({ text: '\u2705 Checked in for Great Gold Bird today.', font: 'Arial', size: 24, italics: true })]),
+      heading2('What you’ll see:'),
+      callout([new TextRun({ text: '✅ Checked in for Great Gold Bird today.', font: 'Arial', size: 24, italics: true })]),
       spacer(80),
-      body([run('The bot\u2019s reply is private \u2014 only you can see it.')]),
+      body([run('The bot’s reply is private — only you can see it.')]),
 
       spacer(200),
       divider(),
       spacer(80),
 
-      // ── Section 2 ─────────────────────────────────────────────────────────
-      heading1('2. Viewing Your Schedule'),
+      // ── Section 3: Schedule ───────────────────────────────────────────────
+      heading1('3. Viewing Your Schedule'),
       body([run('Use '), code('/member-schedule'), run(' to see upcoming shifts.')]),
 
       spacer(120),
@@ -276,7 +327,7 @@ const doc = new Document({
       optionsTable([
         ['name',     'One of these two', 'First name as it appears in Bookeo (e.g. DeShae)'],
         ['discord',  'One of these two', '@mention a linked cast member instead'],
-        ['week_of',  'No',               'Start date to look from \u2014 defaults to today'],
+        ['week_of',  'No',               'Start date to look from — defaults to today'],
       ]),
 
       spacer(120),
@@ -287,28 +338,38 @@ const doc = new Document({
       codeBlock(['/member-schedule name:Allen']),
 
       spacer(120),
-      heading2('What you\u2019ll see:'),
+      heading2('What you’ll see:'),
       codeBlock([
-        '\ud83d\udcc5 Allen\u2019s schedule: Thursday, May 14 \u2013 next 7 days',
+        '📅 Allen’s schedule: Thursday, May 14 – next 7 days',
         '',
-        '  \u2022 Great Gold Bird \u2014 Thursday, May 14 at 7:00 PM (8 guests)',
-        '  \u2022 The Endings \u2014 Saturday, May 16 at 5:30 PM (12 guests)',
+        '  • Great Gold Bird — Thursday, May 14 at 7:00 PM (8 guests)',
+        '  • The Endings — Saturday, May 16 at 5:30 PM (12 guests)',
       ]),
 
       spacer(120),
-      body([run('You can also look up a teammate\u2019s schedule the same way \u2014 just use their name or @mention them.')]),
+      body([run('You can also look up a teammate’s schedule the same way — just use their name or @mention them.')]),
 
       spacer(200),
       divider(),
       spacer(80),
 
-      // ── Section 3 ─────────────────────────────────────────────────────────
-      heading1('3. Requesting Shift Coverage'),
+      // ── Section 4: Coverage Request ───────────────────────────────────────
+      heading1('4. Requesting Shift Coverage'),
+
+      heading2('What the bot does automatically'),
+      body([run('Once you post a coverage request, the bot takes it from there:')]),
+      spacer(80),
+      bullet([run('Posts individual messages for each shift in your show’s role channel (e.g. '), code('#mfb-daphne'), run(', '), code('#ggb-mikey'), run(', '), code('#endings-hr'), run(')')]),
+      bullet([run('Sends daily reminders about open requests until they’re filled')]),
+      bullet([run('Notifies the coverage manager automatically when a shift is covered')]),
+
+      spacer(120),
+      heading2('What you need to do'),
       body([run('Use '), code('/coverage-request'), run(' when you need someone to cover one or more of your shifts.')]),
 
       spacer(120),
       heading2('How to use it:'),
-      numbered([run('Type '), code('/coverage-request'), run(' and fill in the options:')], 'steps2'),
+      numbered([run('Type '), code('/coverage-request'), run(' and fill in the options:')], 'steps3'),
       spacer(80),
 
       optionsTable([
@@ -317,19 +378,19 @@ const doc = new Document({
       ]),
 
       spacer(120),
-      numbered([run('Hit Enter. A form will pop up asking for your shift dates and times \u2014 enter one per line:')], 'steps2'),
+      numbered([run('Hit Enter. A form will pop up asking for your shift dates and times — enter one per line:')], 'steps3'),
       spacer(80),
       codeBlock([
         '5/1/2026 at 7pm',
         '5/2/2026 at 5:30pm',
       ]),
       spacer(80),
-      numbered([run('Submit the form. The bot posts your request to the coverage channel.')], 'steps2'),
+      numbered([run('Submit the form. The bot posts your request to the coverage channel.')], 'steps3'),
 
       spacer(160),
       heading2('About the character option (MFB and The Endings):'),
       body([
-        run('These shows have two actors per show, each with their own coverage channel. You must select your character when submitting \u2014 otherwise the bot won\u2019t know where to post.'),
+        run('These shows have two actors per show, each with their own coverage channel. You must select your character when submitting — otherwise the bot won’t know where to post.'),
       ]),
       spacer(80),
       bullet([bold('MFB: '), run('choose '), code('Daphne'), run(' or '), code('Houdini')]),
@@ -345,27 +406,27 @@ const doc = new Document({
         bold('Coverage Request ID'),
         run(' (e.g. '),
         new TextRun({ text: 'Coverage Request ID: 12', font: 'Courier New', size: 22, italics: true, color: '444444' }),
-        run('). Save this number \u2014 you\u2019ll need it if you want to cancel the request later.'),
+        run('). Save this number — you’ll need it if you want to cancel the request later.'),
       ]),
 
       spacer(200),
       divider(),
       spacer(80),
 
-      // ── Section 4 ─────────────────────────────────────────────────────────
-      heading1('4. Cancelling a Coverage Request'),
-      body([run('Use '), code('/cancel-coverage-request'), run(' to remove a coverage request you no longer need.')]),
+      // ── Section 5: Cancel ─────────────────────────────────────────────────
+      heading1('5. Cancelling a Coverage Request'),
+      body([run('Use '), code('/cancel-coverage-request'), run(' to cancel a shift you no longer need covered.')]),
 
       spacer(120),
       heading2('How to use it:'),
-      numbered([run('Find the '), bold('Coverage Request ID'), run(' at the bottom of your original coverage post.')], 'steps3'),
-      numbered([run('Type '), code('/cancel-coverage-request request_id:[number]'), run(' \u2014 replacing '), code('[number]'), run(' with your ID.')], 'steps3'),
+      numbered([run('Find the '), bold('Shift ID'), run(' at the bottom of the specific shift post you want to cancel.')], 'steps4'),
+      numbered([run('Type '), code('/cancel-coverage-request request_id:[number]'), run(' — replacing '), code('[number]'), run(' with that ID.')], 'steps4'),
 
       spacer(120),
       heading2('What happens:'),
-      body([run('The bot deletes the coverage post(s) from the channel and marks the request as cancelled. You\u2019ll get a private confirmation message.')]),
+      body([run('The shift post is updated to show it’s cancelled (it stays in the channel so the history is preserved). If it was the last open shift in your request, the header post is also updated. You’ll get a private confirmation message.')]),
       spacer(80),
-      callout([new TextRun({ text: '\u2705 Coverage request 12 cancelled and post(s) deleted.', font: 'Arial', size: 24, italics: true })]),
+      callout([new TextRun({ text: '✅ Shift 12 cancelled.', font: 'Arial', size: 24, italics: true })]),
       spacer(80),
       body([bold('Note: '), run('You can only cancel your own requests. If you need an admin to cancel one for you, ask them to run the same command.')]),
 
@@ -373,17 +434,17 @@ const doc = new Document({
       divider(),
       spacer(80),
 
-      // ── Section 5 ─────────────────────────────────────────────────────────
-      heading1('5. Responding to Someone Else\u2019s Coverage Request'),
-      body([run('When a cast member posts a coverage request, you\u2019ll see it in the show\u2019s coverage channel. Here\u2019s how to respond:')]),
+      // ── Section 6: Responding ─────────────────────────────────────────────
+      heading1('6. Responding to Someone Else’s Coverage Request'),
+      body([run('When a cast member posts a coverage request, you’ll see it in the show’s coverage channel. Here’s how to respond:')]),
       spacer(80),
 
-      bullet([bold('\u2705 React \u2705 '), run('if you\u2019re available to take the shift')]),
-      bullet([bold('\u274c React \u274c '), run('if you\u2019re unavailable')]),
-      bullet([bold('\u2753 React \u2753 '), run('if you\u2019re unsure')]),
+      bullet([bold('✅ React ✅ '), run('if you’re available to take the shift')]),
+      bullet([bold('❌ React ❌ '), run('if you’re unavailable')]),
+      bullet([bold('❓ React ❓ '), run('if you’re unsure')]),
 
       spacer(120),
-      body([run('Reacting \u2705 lets the person requesting coverage (and the production team) see who\u2019s available. Once coverage is confirmed, the post will be updated automatically.')]),
+      body([run('Reacting ✅ lets the person requesting coverage (and the production team) see who’s available. Once coverage is confirmed by an admin, the post will be updated to show it’s covered.')]),
 
       spacer(200),
       divider(),
@@ -391,8 +452,8 @@ const doc = new Document({
 
       // ── Tips ──────────────────────────────────────────────────────────────
       heading1('Tips'),
-      bullet([run('All bot replies are '), bold('private by default'), run(' \u2014 only you can see them.')]),
-      bullet([run('If the bot doesn\u2019t respond, it may be offline. Check with an admin.')]),
+      bullet([run('All bot replies are '), bold('private by default'), run(' — only you can see them.')]),
+      bullet([run('If the bot doesn’t respond, it may be offline. Check with an admin.')]),
       bullet([run('Type '), code('/help'), run(' at any time to see a quick list of available commands in Discord.')]),
     ],
   }],
