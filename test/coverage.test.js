@@ -506,13 +506,19 @@ test('analyzeCoverage — single-role show, one reactor → isFilled true, showT
 // ─── buildAllRespondedDM ──────────────────────────────────────────────────────
 
 test('buildAllRespondedDM — manager variant contains show, role, date, and swings suggestion', () => {
-  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'manager');
+  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'manager', [], 'Jane Smith');
   assert.ok(dm.includes('Great Gold Bird'), 'should include show label');
   assert.ok(dm.includes('Friday, May 30 at 7:00pm'), 'should include date/time');
   assert.ok(dm.includes('Mikey'), 'should include role name');
   assert.ok(dm.includes('none are available'), 'should state no availability');
   assert.ok(dm.includes('swings'), 'should suggest swings');
   assert.ok(dm.includes('https://discord.com/link'), 'should include post link');
+  assert.ok(dm.includes('Jane Smith'), 'should include requester name');
+});
+
+test('buildAllRespondedDM — manager variant with no requesterName omits the submitted-by line', () => {
+  const dm = buildAllRespondedDM(['Mikey'], 'GGB', 'Friday, May 30 at 7:00pm', 'https://discord.com/link', 'manager');
+  assert.ok(!dm.includes('submitted by'), 'should not include submitted-by line when requesterName is omitted');
 });
 
 test('buildAllRespondedDM — requester variant adds cast manager escalation line', () => {

@@ -17,6 +17,7 @@ const utils   = require('../lib/utils');
 const {
   runMeetingReminderCheck, runShiftDMs,
   runCustomGameReminders, runCoverageRolePings, runEodCoverageReminder,
+  runLatebookingCheck,
 } = require('../lib/scheduler');
 const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
 
@@ -30,6 +31,7 @@ function cleanDb() {
   db.db.prepare('DELETE FROM custom_games').run();
   db.db.prepare('DELETE FROM coverage_shifts').run();
   db.db.prepare('DELETE FROM coverage_requests').run();
+  db.db.prepare('DELETE FROM late_booking_baseline').run();
   db.db.prepare('DELETE FROM bot_config').run();
 }
 
@@ -582,8 +584,9 @@ test('runCoverageRolePings — all responded, none available: DMs sent, no chann
   assert.equal(dms.length,  2, 'requester and manager should each get a DM');
   assert.ok(dms.some(d => d.userId === REQUESTER_ID),    'requester DM sent');
   assert.ok(dms.some(d => d.userId === 'manager-id-1'),  'manager DM sent');
-  assert.ok(dms.find(d => d.userId === REQUESTER_ID).content.includes('cast manager'), 'requester DM mentions cast manager');
-  assert.ok(dms.find(d => d.userId === 'manager-id-1').content.includes('swings'),    'manager DM mentions swings');
+  assert.ok(dms.find(d => d.userId === REQUESTER_ID).content.includes('cast manager'),  'requester DM mentions cast manager');
+  assert.ok(dms.find(d => d.userId === 'manager-id-1').content.includes('swings'),     'manager DM mentions swings');
+  assert.ok(dms.find(d => d.userId === 'manager-id-1').content.includes('Requester Test'), 'manager DM includes requester name');
 });
 
 test('runCoverageRolePings — all-responded alert not re-sent when flag already set', async () => {
@@ -729,4 +732,137 @@ test('runCoverageRolePings — no maybe-reactors: possible-availability line abs
   for (const dm of dms) {
     assert.ok(!dm.content.includes('possible availability'), 'no maybe-reactors means no possible-availability line');
   }
+});
+
+// ─── runLatebookingCheck ──────────────────────────────────────────────────────
+
+test('runLatebookingCheck — newly-booked show sends DM to linked cast member', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-alice', 'Alice Smith', 'Alice Smith');
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }]);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'], guest_count: 5 }],
+  });
+
+  await runLatebookingCheck(discord, bookeo, TODAY);
+
+  assert.equal(dms.length, 1, 'one DM should be sent');
+  assert.equal(dms[0].userId, 'discord-alice', 'DM goes to the linked Discord user');
+  assert.ok(dms[0].content.includes('Last-minute booking'), 'DM includes last-minute alert label');
+  assert.ok(dms[0].content.includes('Great Gold Bird'),    'DM includes show label');
+  assert.ok(dms[0].content.includes('5 guests'),           'DM includes guest count');
+});
+
+test('runLatebookingCheck — already-notified row is not re-sent', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-bob', 'Bob Jones', 'Bob Jones');
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '9:00 PM', cast: ['Bob Jones'] }]);
+  // Mark as already notified
+  const [row] = db.getUnnotifiedLatebookingRows(TODAY);
+  db.markLatebookingNotified(row.id);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '9:00 PM', cast: ['Bob Jones'], guest_count: 3 }],
+  });
+
+  await runLatebookingCheck(discord, bookeo, TODAY);
+  assert.equal(dms.length, 0, 'no DM when row already marked notified');
+});
+
+test('runLatebookingCheck — still-blank show produces no DM', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-carol', 'Carol Brown', 'Carol Brown');
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Carol Brown'] }]);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Carol Brown'], guest_count: 0 }],
+  });
+
+  await runLatebookingCheck(discord, bookeo, TODAY);
+  assert.equal(dms.length, 0, 'no DM when show still has zero guests');
+});
+
+test('runLatebookingCheck — sweep catches later-show booking at earlier timer', async () => {
+  // 5pm and 9pm shows both blank. Timer fires for 5pm, but 9pm is also booked.
+  // Both should be caught and notified in one sweep.
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-alice', 'Alice Smith', 'Alice Smith');
+  db.linkMember('discord-bob',   'Bob Jones',   'Bob Jones');
+  db.seedLatebookingBaseline([
+    { date: TODAY, show: 'GGB', time: '5:00 PM', cast: ['Alice Smith'] },
+    { date: TODAY, show: 'GGB', time: '9:00 PM', cast: ['Bob Jones']   },
+  ]);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+  });
+  // Fresh Bookeo shows BOTH shows now booked
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [
+      { date: TODAY, show: 'GGB', time: '5:00 PM', cast: ['Alice Smith'], guest_count: 0 }, // 5pm still blank
+      { date: TODAY, show: 'GGB', time: '9:00 PM', cast: ['Bob Jones'],   guest_count: 4 }, // 9pm booked
+    ],
+  });
+
+  await runLatebookingCheck(discord, bookeo, TODAY);
+
+  assert.equal(dms.length, 1, 'only the newly-booked 9pm show triggers a DM');
+  assert.equal(dms[0].userId, 'discord-bob', 'DM goes to 9pm cast member');
+});
+
+test('runLatebookingCheck — unlinked cast member is skipped silently', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  // 'Ghost Member' has no entry in member_links
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Ghost Member'] }]);
+
+  const dms = [];
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId, content) => dms.push({ userId, content }),
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Ghost Member'], guest_count: 2 }],
+  });
+
+  await assert.doesNotReject(() => runLatebookingCheck(discord, bookeo, TODAY));
+  assert.equal(dms.length, 0, 'no DM for unlinked cast member — skipped silently');
+});
+
+test('seedLatebookingBaseline — seeds only blank shows (guest_count === 0)', () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  // Simulate what planLatebookingChecks returns: only blank shows
+  db.seedLatebookingBaseline([
+    { date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }, // blank (planLatebookingChecks already filtered)
+  ]);
+  const rows = db.getUnnotifiedLatebookingRows(TODAY);
+  assert.equal(rows.length, 1, 'blank show should be seeded');
+  assert.equal(rows[0].time, '7:00 PM');
+});
+
+test('seedLatebookingBaseline — re-seeding same date does not duplicate rows', () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }]);
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }]); // second call
+  const rows = db.getUnnotifiedLatebookingRows(TODAY);
+  assert.equal(rows.length, 1, 'rows must not be duplicated on re-seed');
 });
