@@ -168,6 +168,11 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 
 **Admin commands:** `/force-checkin`, `/set-checkin-channel`, `/add-checkin-contact`, `/remove-checkin-contact`, `/list-checkin-contacts`, `/dev-checkin-test` (seed/clear)
 
+### Coverage architecture (internal)
+- `lib/coverage-repository.js` — wraps all coverage DB calls behind a clean named interface; used by `rsvp.js` and `coverage-jobs.js` instead of calling `db` directly
+- `lib/coverage-jobs.js` — `runCoverageRolePings(discord, repo)` (8am role pings) and `runEodCoverageReminder(discord, repo)` (9pm EOD DMs); `scheduler.js` is a thin orchestrator that imports and calls these
+- `lib/coverage-session.js` — multi-role confirmation state is DB-backed (`coverage_confirmation_sessions` table) so partial selections survive bot restarts; sessions expire after 30 minutes (checked at read time + startup cleanup)
+
 ### Misc
 - `/help` — ephemeral command list, available to all members
 - All date displays include the year: "Monday, April 20, 2026"

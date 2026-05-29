@@ -5,7 +5,7 @@ See RULES.md for operational rules with feedback tracking.
 ## Commands
 - Start: `node index.js` / `npm start`
 - Register commands: `node deploy-commands.js` / `npm run deploy-commands` — re-run on any add/rename/option change
-- Tests: `npm test` (runs all `test/*.test.js` — 10 files, 227 tests)
+- Tests: `npm test` (runs all `test/*.test.js` — 8 files, ~240 tests)
 
 ## Env vars
 DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID, BOOKEO_API_URL, BOOKEO_API_KEY
@@ -18,7 +18,7 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - `pack.py`: always `--validate false` (validator crashes on cp1252/Unicode bug on this machine)
 
 ## Architecture
-`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,coverage-session,confirm,utils,checkin,scheduler}.js`
+`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,coverage-repository,coverage-session,coverage-jobs,confirm,utils,checkin,scheduler}.js`
 
 - SQLite: `node:sqlite` (Node 24 built-in) — NOT `better-sqlite3` (native compile fails on Railway)
 - Commands: guild-scoped (instant). Re-run `deploy-commands.js` on any change.
@@ -61,21 +61,25 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - `/coverage-request`: character required when `showCharacters(show)` is non-null (MFB/Endings); `customId: coverage_request_modal:{SHOW}:{CHARACTER}`
 - Posts always edited, never deleted (exception: `/cancel-custom-game` slash cmd deletes; `/open-coverage` button edits)
 - `planShiftCancel` → `delete-all` | `edit-header` | `delete-shift`
-- `analyzeCoverage(guild, yesUsers, showKey, character?)` in `coverage.js` → `{ isFilled, missingRoles, availableByRole, showType }` — single source of truth for fill detection; used by `rsvp.js`, `scheduler.js`
+- `analyzeCoverage(guild, yesUsers, showKey, character?)` in `coverage.js` → `{ isFilled, missingRoles, availableByRole, showType }` — single source of truth for fill detection; used by `rsvp.js`, `coverage-jobs.js`
 - Confirm button: `confirm_coverage:{type}:{id}` → original message fetched via DB (channel+messageID) → reactions fetched from Discord
 - Multi-role confirm: `handleMultiRoleButton` → `coverage-session.js` (`setMultiRoleSelection` per dropdown) → `cmr_submit:{gameId}` → `planMultiRoleConfirm` → execute
+- Multi-role sessions: DB-backed (`coverage_confirmation_sessions` table); 30-min expiry checked at read time; startup deletes sessions older than 30 min; expired session shows ephemeral error in confirm flow
 - After confirm: if all request shifts resolved → `buildResolvedHeaderPost()`
 - `/purge` (ManageGuild): hard-deletes `Coverage Shift` or `Custom Game` + post
 - **Requester exclusion:** 8am role-ping cron skips the coverage requester (they know already); stored as `requester_discord_id` on `coverage_requests`
 - **All-responded DMs:** when every cast member has reacted (all ✅/❌), bot DMs both the requester and the coverage manager. If no one said yes, it suggests reaching out to swings and (in the requester DM) contacting the cast manager. Manager DM includes requester name.
   - `buildAllRespondedDM(exhaustedRoles, show, dateTimeStr, postLink, recipient, maybeNames=[], requesterName=null)` in `coverage.js`
   - `recipient`: `'requester'` | `'manager'`; manager variant includes `requesterName` line if provided
+- **Coverage DB layer:** `lib/coverage-repository.js` wraps all coverage-related `db.js` calls with clean named methods (e.g. `repo.getOpenShifts()`, `repo.confirmShift()`). All coverage callers (`rsvp.js`, `coverage-jobs.js`) use repo — not `db` directly.
+- **Coverage cron jobs:** `lib/coverage-jobs.js` exports `runCoverageRolePings(discord, repo)` (8am role pings) and `runEodCoverageReminder(discord, repo)` (9pm EOD DM to cast manager). `scheduler.js` imports and calls them, passing the module-level `repo`.
 
 ## Check-in system
 - Config: `lib/shows.js` `checkin: { roles, callTimeOffset: -30 }` per show
 - Eligible: GGB (Mikey), Lucidity (Riley), Endings (HR role only) — MFB excluded (no checkin block)
 - `checkin_records`: `id, shift_date, show, bookeo_name, discord_id, call_time (unix), checked_in_at, alert_message_id, alert_channel_id, forced_by`
-- Seed: `seedAndScheduleToday()` → `groupEligibleShifts()` (dedup by person+show+date, keep earliest time) → upsert → schedule alerts
+- Seed: `seedAndScheduleToday()` → `seedToday(client)` → `groupEligibleShifts()` (dedup by person+show+date, keep earliest time) → upsert → `scheduleAlerts(client, records)`
+- `seedToday(client, { _bookeo })` and `scheduleAlerts(client, records)` are exported separately for testing (dependency injection via `_bookeo`)
 - `scheduler.start()` called AFTER `seedAndScheduleToday()` resolves (prevents 9am cron race on startup)
 - `_trySeed`: 20s timeout; retry every 5min up to 1hr (12 attempts); stops if date rolls over
 - Alert chain: `_scheduleCheckinAlert` → `_fireCheckinAlert` (no grace window; past call times fire immediately on restart) → `_editAlertForLateCheckin`
