@@ -13,12 +13,13 @@ const assert = require('node:assert/strict');
 process.env.DB_PATH = ':memory:';
 
 const db      = require('../lib/db');
+const repo    = require('../lib/coverage-repository');
 const utils   = require('../lib/utils');
 const {
   runMeetingReminderCheck, runShiftDMs,
-  runCustomGameReminders, runCoverageRolePings, runEodCoverageReminder,
-  runLatebookingCheck,
+  runCustomGameReminders, runLatebookingCheck,
 } = require('../lib/scheduler');
+const { runCoverageRolePings, runEodCoverageReminder } = require('../lib/coverage-jobs');
 const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -425,7 +426,7 @@ test('runCoverageRolePings — no open shifts or games: sendMessage not called',
     sendMessage: async (_ch, content) => sent.push(content),
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
   assert.equal(sent.length, 0, 'no open items → sendMessage should not be called');
 });
 
@@ -464,7 +465,7 @@ test('runCoverageRolePings — coverage requester not mentioned even when silent
     _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
 
   assert.equal(sent.length, 1, 'one ping message should be sent');
   assert.ok(!sent[0].includes(`<@${REQUESTER_ID}>`), 'requester must not be pinged');
@@ -504,7 +505,7 @@ test('runCoverageRolePings — requester is only silent member: falls back to ro
     _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
 
   assert.equal(sent.length, 1, 'one ping message should be sent');
   assert.ok(!sent[0].includes(`<@${REQUESTER_ID}>`), 'requester must not be individually mentioned');
@@ -522,7 +523,7 @@ test('runEodCoverageReminder — no manager configured: sendDM not called', asyn
     sendDM: async (userId) => dmsSent.push(userId),
   });
 
-  await runEodCoverageReminder(discord);
+  await runEodCoverageReminder(discord, repo);
   assert.equal(dmsSent.length, 0, 'no manager → sendDM should not be called');
 });
 
@@ -535,7 +536,7 @@ test('runEodCoverageReminder — manager set but no unconfirmed items: sendDM no
     sendDM: async (userId) => dmsSent.push(userId),
   });
 
-  await runEodCoverageReminder(discord);
+  await runEodCoverageReminder(discord, repo);
   assert.equal(dmsSent.length, 0, 'no unconfirmed items → sendDM should not be called');
 });
 
@@ -578,7 +579,7 @@ test('runCoverageRolePings — all responded, none available: DMs sent, no chann
     _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
 
   assert.equal(sent.length, 0, 'no channel ping should be sent');
   assert.equal(dms.length,  2, 'requester and manager should each get a DM');
@@ -618,7 +619,7 @@ test('runCoverageRolePings — all-responded alert not re-sent when flag already
     _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
   assert.equal(dms.length, 0, 'DMs must not re-fire when flag is already set');
 });
 
@@ -650,7 +651,7 @@ test('runCoverageRolePings — no manager configured: only requester DM sent', a
     _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
   assert.equal(dms.length, 1, 'only requester DM when no manager configured');
   assert.equal(dms[0].userId, REQUESTER_ID, 'DM goes to requester');
 });
@@ -689,7 +690,7 @@ test('runCoverageRolePings — maybe-reactor display name appears in DM', async 
     _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
 
   assert.equal(dms.length, 2, 'both requester and manager DM sent');
   for (const dm of dms) {
@@ -727,7 +728,7 @@ test('runCoverageRolePings — no maybe-reactors: possible-availability line abs
     _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
   });
 
-  await runCoverageRolePings(discord);
+  await runCoverageRolePings(discord, repo);
 
   for (const dm of dms) {
     assert.ok(!dm.content.includes('possible availability'), 'no maybe-reactors means no possible-availability line');
