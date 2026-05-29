@@ -13,7 +13,8 @@ const assert = require('node:assert/strict');
 
 process.env.DB_PATH = ':memory:';
 
-const { planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions } = require('../lib/scheduler');
+const { planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions, planLatebookingChecks, findNewlyBooked } = require('../lib/scheduler');
+const checkin = require('../lib/checkin');
 
 // ─── planMeetingReminders ─────────────────────────────────────────────────────
 
@@ -255,4 +256,112 @@ test('planNonResponderMentions — coverage requester excluded even when silent 
 
 test('planCustomGameReminders — empty list returns empty array', () => {
   assert.deepEqual(planCustomGameReminders([]), []);
+});
+
+// ─── planLatebookingChecks ────────────────────────────────────────────────────
+
+test('planLatebookingChecks — returns only shifts with guest_count === 0', () => {
+  const shifts = [
+    { date: '2026-06-01', time: '7:00 PM', show: 'GGB', cast: ['Alice Smith'], guest_count: 0 },
+    { date: '2026-06-01', time: '9:00 PM', show: 'GGB', cast: ['Bob Jones'],   guest_count: 5 },
+  ];
+  const result = planLatebookingChecks(shifts);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '7:00 PM');
+});
+
+test('planLatebookingChecks — returns empty when all shifts have guests', () => {
+  const shifts = [
+    { date: '2026-06-01', time: '7:00 PM', show: 'GGB', cast: ['Alice Smith'], guest_count: 3 },
+  ];
+  assert.deepEqual(planLatebookingChecks(shifts), []);
+});
+
+test('planLatebookingChecks — returns empty for empty input', () => {
+  assert.deepEqual(planLatebookingChecks([]), []);
+});
+
+test('planLatebookingChecks — checkTime is exactly 110 minutes before show start', () => {
+  const shifts = [
+    { date: '2026-06-01', time: '7:00 PM', show: 'GGB', cast: ['Alice Smith'], guest_count: 0 },
+  ];
+  const result       = planLatebookingChecks(shifts);
+  const showUnix     = checkin.shiftCallTimeUnix('2026-06-01', '7:00 PM', 0);
+  const checkUnix    = result[0].checkTime.getTime() / 1000;
+  assert.equal(showUnix - checkUnix, 110 * 60, 'checkTime should be 110 minutes before show start');
+});
+
+test('planLatebookingChecks — result includes show, date, time, cast fields', () => {
+  const shifts = [
+    { date: '2026-06-01', time: '7:00 PM', show: 'GGB', cast: ['Alice Smith', 'Bob Jones'], guest_count: 0 },
+  ];
+  const [result] = planLatebookingChecks(shifts);
+  assert.equal(result.show, 'GGB');
+  assert.equal(result.date, '2026-06-01');
+  assert.equal(result.time, '7:00 PM');
+  assert.deepEqual(result.cast, ['Alice Smith', 'Bob Jones']);
+});
+
+test('planLatebookingChecks — multiple blank shifts all returned', () => {
+  const shifts = [
+    { date: '2026-06-01', time: '7:00 PM', show: 'GGB', cast: ['Alice'], guest_count: 0 },
+    { date: '2026-06-01', time: '9:00 PM', show: 'GGB', cast: ['Bob'],   guest_count: 0 },
+  ];
+  assert.equal(planLatebookingChecks(shifts).length, 2);
+});
+
+// ─── findNewlyBooked ──────────────────────────────────────────────────────────
+
+test('findNewlyBooked — returns baseline show that now has guests', () => {
+  const baseline = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'] }];
+  const current  = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 3 }];
+  const result   = findNewlyBooked(baseline, current);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '7:00 PM');
+});
+
+test('findNewlyBooked — returns empty when shows are still blank', () => {
+  const baseline = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'] }];
+  const current  = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 0 }];
+  assert.deepEqual(findNewlyBooked(baseline, current), []);
+});
+
+test('findNewlyBooked — empty baseline returns empty', () => {
+  const current = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 5 }];
+  assert.deepEqual(findNewlyBooked([], current), []);
+});
+
+test('findNewlyBooked — handles multiple newly-booked shows', () => {
+  const baseline = [
+    { date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'] },
+    { date: '2026-06-01', show: 'GGB', time: '9:00 PM', cast: ['Bob']   },
+  ];
+  const current = [
+    { date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 2 },
+    { date: '2026-06-01', show: 'GGB', time: '9:00 PM', cast: ['Bob'],   guest_count: 4 },
+  ];
+  assert.equal(findNewlyBooked(baseline, current).length, 2);
+});
+
+test('findNewlyBooked — ignores current shifts not in baseline', () => {
+  const baseline = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'] }];
+  const current  = [
+    { date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 0 },
+    { date: '2026-06-01', show: 'MFB', time: '8:00 PM', cast: ['Bob'],   guest_count: 5 }, // not in baseline
+  ];
+  assert.deepEqual(findNewlyBooked(baseline, current), []);
+});
+
+test('findNewlyBooked — returns only newly-booked, not still-blank', () => {
+  const baseline = [
+    { date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'] },
+    { date: '2026-06-01', show: 'GGB', time: '9:00 PM', cast: ['Bob']   },
+  ];
+  const current = [
+    { date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 3 },
+    { date: '2026-06-01', show: 'GGB', time: '9:00 PM', cast: ['Bob'],   guest_count: 0 },
+  ];
+  const result = findNewlyBooked(baseline, current);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].time, '7:00 PM');
 });
