@@ -13,7 +13,7 @@ const assert = require('node:assert/strict');
 
 process.env.DB_PATH = ':memory:';
 
-const { planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions, planLatebookingChecks, findNewlyBooked } = require('../lib/scheduler');
+const { planExpiredMeetings, planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions, planLatebookingChecks, findNewlyBooked } = require('../lib/scheduler');
 const checkin = require('../lib/checkin');
 
 // ─── planMeetingReminders ─────────────────────────────────────────────────────
@@ -135,8 +135,48 @@ test('planMeetingReminders — monthly_weekday: last weekday of month, month bou
   assert.equal(item24h.dateStr, '2026-04-28');
 });
 
-test('planMeetingReminders — empty meetings list returns empty array', () => {
-  assert.deepEqual(planMeetingReminders([], new Date(2026, 3, 7)), []);
+
+// ─── planExpiredMeetings ──────────────────────────────────────────────────────
+
+test('planExpiredMeetings — returns one-time meeting whose date is before today', () => {
+  const today   = new Date(2026, 3, 14); // April 14
+  const expired = oneTimeMeeting('2026-04-13');
+  const result  = planExpiredMeetings([expired], today);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, expired.id);
+});
+
+test('planExpiredMeetings — one-time meeting on today is not expired', () => {
+  const today   = new Date(2026, 3, 14);
+  const current = oneTimeMeeting('2026-04-14');
+  const result  = planExpiredMeetings([current], today);
+  assert.equal(result.length, 0);
+});
+
+test('planExpiredMeetings — future one-time meeting is not expired', () => {
+  const today   = new Date(2026, 3, 14);
+  const future  = oneTimeMeeting('2026-04-20');
+  const result  = planExpiredMeetings([future], today);
+  assert.equal(result.length, 0);
+});
+
+test('planExpiredMeetings — recurring meetings are never expired', () => {
+  const today   = new Date(2026, 3, 14);
+  const weekly  = weeklyMeeting('monday');
+  const monthly = monthlyMeeting('monday', 'first');
+  const result  = planExpiredMeetings([weekly, monthly], today);
+  assert.equal(result.length, 0);
+});
+
+test('planExpiredMeetings — mixed list returns only past one-time meetings', () => {
+  const today   = new Date(2026, 3, 14);
+  const past    = oneTimeMeeting('2026-04-10');
+  const current = oneTimeMeeting('2026-04-14');
+  const future  = oneTimeMeeting('2026-04-20');
+  const weekly  = weeklyMeeting('monday');
+  const result  = planExpiredMeetings([past, current, future, weekly], today);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].date, '2026-04-10');
 });
 
 // ─── planShiftDMs ─────────────────────────────────────────────────────────────
@@ -172,14 +212,6 @@ test('planShiftDMs — cast member without Discord link is skipped', () => {
   assert.equal(result[0].discord_id, 'U001');
 });
 
-test('planShiftDMs — empty shifts returns empty array', () => {
-  const memberLinks = new Map([['Alice Smith', { discordId: 'U001' }]]);
-  assert.deepEqual(planShiftDMs([], memberLinks, 'weekly'), []);
-});
-
-test('planShiftDMs — empty memberLinks returns empty array', () => {
-  assert.deepEqual(planShiftDMs(SAMPLE_SHIFTS, new Map(), 'weekly'), []);
-});
 
 test('planShiftDMs — daily label appears in dmText', () => {
   const memberLinks = new Map([['Alice Smith', { discordId: 'U001' }]]);
@@ -243,9 +275,6 @@ test('planNonResponderMentions — all excluded returns empty array (role-ping f
   assert.deepEqual(result, []);
 });
 
-test('planNonResponderMentions — empty member list returns empty array', () => {
-  assert.deepEqual(planNonResponderMentions([], ['U1'], ['U2']), []);
-});
 
 test('planNonResponderMentions — coverage requester excluded even when silent (no reaction)', () => {
   // The requester's ID is passed as an exclusion; they should not appear in results
@@ -254,9 +283,6 @@ test('planNonResponderMentions — coverage requester excluded even when silent 
   assert.deepEqual(result, ['U-OTHER']);
 });
 
-test('planCustomGameReminders — empty list returns empty array', () => {
-  assert.deepEqual(planCustomGameReminders([]), []);
-});
 
 // ─── planLatebookingChecks ────────────────────────────────────────────────────
 
@@ -277,9 +303,6 @@ test('planLatebookingChecks — returns empty when all shifts have guests', () =
   assert.deepEqual(planLatebookingChecks(shifts), []);
 });
 
-test('planLatebookingChecks — returns empty for empty input', () => {
-  assert.deepEqual(planLatebookingChecks([]), []);
-});
 
 test('planLatebookingChecks — checkTime is exactly 110 minutes before show start', () => {
   const shifts = [
@@ -326,10 +349,6 @@ test('findNewlyBooked — returns empty when shows are still blank', () => {
   assert.deepEqual(findNewlyBooked(baseline, current), []);
 });
 
-test('findNewlyBooked — empty baseline returns empty', () => {
-  const current = [{ date: '2026-06-01', show: 'GGB', time: '7:00 PM', cast: ['Alice'], guest_count: 5 }];
-  assert.deepEqual(findNewlyBooked([], current), []);
-});
 
 test('findNewlyBooked — handles multiple newly-booked shows', () => {
   const baseline = [

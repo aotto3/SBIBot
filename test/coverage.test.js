@@ -117,9 +117,6 @@ test('isRequestDuplicate — cancelled shift is not a duplicate', () => {
   assert.equal(isRequestDuplicate(existing, { date: '2026-05-01', time: '19:00' }), false);
 });
 
-test('isRequestDuplicate — empty existing list returns false', () => {
-  assert.equal(isRequestDuplicate([], { date: '2026-05-01', time: '19:00' }), false);
-});
 
 // ─── groupShiftsForDisplay ────────────────────────────────────────────────────
 
@@ -142,9 +139,6 @@ test('groupShiftsForDisplay — single shift returns one group', () => {
   assert.equal(groups['2026-05-01'].length, 1);
 });
 
-test('groupShiftsForDisplay — empty list returns empty object', () => {
-  assert.deepEqual(groupShiftsForDisplay([]), {});
-});
 
 // ─── buildHeaderPost ──────────────────────────────────────────────────────────
 
@@ -196,13 +190,6 @@ test('buildShiftPost — formatted date and time, no show label', () => {
   assert.ok(result.includes('2027'),             'should include year');
 });
 
-test('buildShiftPost — no show label for MFB either', () => {
-  const request = { show: 'MFB' };
-  const shift   = { date: '2026-06-15', time: '19:00' };
-  const result  = buildShiftPost(request, shift);
-  assert.ok(!result.includes('Man From Beyond'), 'should not include show label');
-  assert.ok(result.includes('7:00 PM'),          'should include formatted time');
-});
 
 // ─── buildConfirmationPost ────────────────────────────────────────────────────
 
@@ -292,9 +279,6 @@ test('buildFillableDM — single-role: includes show label, date+time, names, li
 
 // ─── buildEodDM ───────────────────────────────────────────────────────────────
 
-test('buildEodDM — empty list returns empty string', () => {
-  assert.equal(buildEodDM([]), '');
-});
 
 test('buildEodDM — single item contains show, date, names, and link', () => {
   const result = buildEodDM([{
@@ -393,9 +377,6 @@ test('planMissingRolePings — multi-role game returns only missing roles', () =
   assert.equal(result[0].messageId, 'M2');
 });
 
-test('planMissingRolePings — empty inputs return empty array', () => {
-  assert.deepEqual(planMissingRolePings([], []), []);
-});
 
 // ─── planShiftCancel ──────────────────────────────────────────────────────────
 

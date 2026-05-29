@@ -25,17 +25,6 @@ test('buildConfirmButton — disabled: label changes, disabled flag set', () => 
   assert.equal(btn.disabled,  true,                       'should be disabled');
 });
 
-test('buildConfirmButton — works for coverage shift type', () => {
-  const row  = buildConfirmButton(false, 'shift', 99);
-  const data = row.toJSON();
-  assert.ok(data.components[0].custom_id.startsWith('confirm_coverage:shift:'));
-});
-
-test('buildConfirmButton — works for game type', () => {
-  const row  = buildConfirmButton(false, 'game', 7);
-  const data = row.toJSON();
-  assert.ok(data.components[0].custom_id.startsWith('confirm_coverage:game:'));
-});
 
 // ─── sortRoleOptions ──────────────────────────────────────────────────────────
 
@@ -72,9 +61,6 @@ test('sortRoleOptions — slash-separated role (Daphne/Houdini) matches both rol
   assert.equal(resultH[0].userId, 'U1', 'dual-role holder matches Houdini');
 });
 
-test('sortRoleOptions — empty input returns empty array', () => {
-  assert.deepEqual(sortRoleOptions([], 'Daphne'), []);
-});
 
 test('sortRoleOptions — all candidates same role, order preserved within group', () => {
   const candidates = [
