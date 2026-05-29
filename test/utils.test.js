@@ -69,66 +69,28 @@ test('resolveChannelByName — throws with channel name in error when not found'
   );
 });
 
-// ─── resolveCoverageChannel ───────────────────────────────────────────────────
+// ─── channel resolvers ────────────────────────────────────────────────────────
 
-test('resolveCoverageChannel — resolves to {prefix}-{autoRole} for single-role show', async () => {
-  const guild = makeMockGuild(['ggb-mikey']);
-  const ch = await resolveCoverageChannel(guild, 'GGB', null);
-  assert.equal(ch.name, 'ggb-mikey');
+test('channel resolvers — default naming convention (no overrides)', async () => {
+  const guild = makeMockGuild(['ggb-mikey', 'mfb-daphne', 'ggb-times']);
+  assert.equal((await resolveCoverageChannel(guild, 'GGB', null)).name,    'ggb-mikey');
+  assert.equal((await resolveCoverageChannel(guild, 'MFB', 'Daphne')).name, 'mfb-daphne');
+  assert.equal((await resolveCheckinChannel(guild, 'GGB')).name,            'ggb-times');
+  assert.equal((await resolveCustomGameChannel(guild, 'GGB')).name,         'ggb-times');
 });
 
-test('resolveCoverageChannel — resolves to {prefix}-{character} for multi-role show', async () => {
-  const guild = makeMockGuild(['mfb-daphne', 'mfb-houdini']);
-  const ch = await resolveCoverageChannel(guild, 'MFB', 'Daphne');
-  assert.equal(ch.name, 'mfb-daphne');
-});
-
-test('resolveCoverageChannel — uses override ID when bot_config key is set', async () => {
-  // Channel '2' in the mock is 'override-channel'
-  const guild = makeMockGuild(['ggb-mikey', 'override-channel']);
-  db.setConfig('coverage_channel_GGB', '2');
+test('channel resolvers — bot_config overrides take precedence', async () => {
+  const guild = makeMockGuild(['ggb-mikey', 'ggb-times', 'override-ch']);
+  db.setConfig('coverage_channel_GGB',     '3');
+  db.setConfig('checkin_alert_channel_GGB', '3');
+  db.setConfig('custom_game_channel_GGB',  '3');
   try {
-    const ch = await resolveCoverageChannel(guild, 'GGB', null);
-    assert.equal(ch.name, 'override-channel');
+    assert.equal((await resolveCoverageChannel(guild, 'GGB', null)).name, 'override-ch');
+    assert.equal((await resolveCheckinChannel(guild, 'GGB')).name,         'override-ch');
+    assert.equal((await resolveCustomGameChannel(guild, 'GGB')).name,      'override-ch');
   } finally {
     db.deleteConfig('coverage_channel_GGB');
-  }
-});
-
-// ─── resolveCheckinChannel ────────────────────────────────────────────────────
-
-test('resolveCheckinChannel — resolves to {prefix}-times when no override', async () => {
-  const guild = makeMockGuild(['ggb-times']);
-  const ch = await resolveCheckinChannel(guild, 'GGB');
-  assert.equal(ch.name, 'ggb-times');
-});
-
-test('resolveCheckinChannel — uses override ID when bot_config key is set', async () => {
-  const guild = makeMockGuild(['ggb-times', 'override-channel']);
-  db.setConfig('checkin_alert_channel_GGB', '2');
-  try {
-    const ch = await resolveCheckinChannel(guild, 'GGB');
-    assert.equal(ch.name, 'override-channel');
-  } finally {
     db.deleteConfig('checkin_alert_channel_GGB');
-  }
-});
-
-// ─── resolveCustomGameChannel ─────────────────────────────────────────────────
-
-test('resolveCustomGameChannel — resolves to {prefix}-times when no override', async () => {
-  const guild = makeMockGuild(['ggb-times']);
-  const ch = await resolveCustomGameChannel(guild, 'GGB');
-  assert.equal(ch.name, 'ggb-times');
-});
-
-test('resolveCustomGameChannel — uses override ID when bot_config key is set', async () => {
-  const guild = makeMockGuild(['ggb-times', 'override-channel']);
-  db.setConfig('custom_game_channel_GGB', '2');
-  try {
-    const ch = await resolveCustomGameChannel(guild, 'GGB');
-    assert.equal(ch.name, 'override-channel');
-  } finally {
     db.deleteConfig('custom_game_channel_GGB');
   }
 });

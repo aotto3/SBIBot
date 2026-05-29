@@ -5,7 +5,7 @@ See RULES.md for operational rules with feedback tracking.
 ## Commands
 - Start: `node index.js` / `npm start`
 - Register commands: `node deploy-commands.js` / `npm run deploy-commands` — re-run on any add/rename/option change
-- Tests: `npm test` (runs all `test/*.test.js` — 7 files)
+- Tests: `npm test` (runs all `test/*.test.js` — 10 files, 227 tests)
 
 ## Env vars
 DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID, BOOKEO_API_URL, BOOKEO_API_KEY
@@ -66,6 +66,10 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - Multi-role confirm: `handleMultiRoleButton` → `coverage-session.js` (`setMultiRoleSelection` per dropdown) → `cmr_submit:{gameId}` → `planMultiRoleConfirm` → execute
 - After confirm: if all request shifts resolved → `buildResolvedHeaderPost()`
 - `/purge` (ManageGuild): hard-deletes `Coverage Shift` or `Custom Game` + post
+- **Requester exclusion:** 8am role-ping cron skips the coverage requester (they know already); stored as `requester_discord_id` on `coverage_requests`
+- **All-responded DMs:** when every cast member has reacted (all ✅/❌), bot DMs both the requester and the coverage manager. If no one said yes, it suggests reaching out to swings and (in the requester DM) contacting the cast manager. Manager DM includes requester name.
+  - `buildAllRespondedDM(exhaustedRoles, show, dateTimeStr, postLink, recipient, maybeNames=[], requesterName=null)` in `coverage.js`
+  - `recipient`: `'requester'` | `'manager'`; manager variant includes `requesterName` line if provided
 
 ## Check-in system
 - Config: `lib/shows.js` `checkin: { roles, callTimeOffset: -30 }` per show
@@ -77,6 +81,19 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - Alert chain: `_scheduleCheckinAlert` → `_fireCheckinAlert` (no grace window; past call times fire immediately on restart) → `_editAlertForLateCheckin`
 - `bot_config` keys: `checkin_alert_channel_{SHOW}`, `checkin_contacts` (JSON array), `coverage_manager`, `coverage_channel_{SHOW}[_{CHARACTER}]`
 - `/checkin-status`: last 3 days; states: ✅ checked in | ⚠️ alert fired | 🔴 MISSED (bug) | ⏳ pending
+
+## Late-booking notifications
+- **Purpose:** detect shows that book late (after the 8:48am DMs) and notify assigned cast immediately
+- **Bookeo constraint:** bookings close 120 min before show time — latest possible booking is 2h before curtain
+- **Morning seed (8:48am):** `runLatebookingSeed(discord, bookeoAdapter)` — fetches today's shifts, finds any with `guest_count === 0`, stores them in `late_booking_baseline` DB table, schedules one `setTimeout` per blank show firing 110 min before that show's start
+- **Pure helpers in `scheduler.js`:**
+  - `planLatebookingChecks(todayShifts)` → filters `guest_count === 0`, computes `checkTime` via `checkin.shiftCallTimeUnix(date, time, -110)`; returns `[{ date, show, time, cast, checkTime }]`
+  - `findNewlyBooked(baselineRows, currentShifts)` → returns baseline rows whose `date|show|time` key now has `guest_count > 0` in current data
+- **Check (fires at 110-min mark):** `runLatebookingCheck(discord, bookeoAdapter, date)` — sweeps ALL unnotified rows for that date, fetches fresh Bookeo data, DMs cast on any newly-booked show, marks row `notified = 1`; sweep-all means a 9pm booking caught at the 5pm timer fires immediately
+- **Restart recovery:** `start()` calls `_scheduleLatebookingCheck` for every `notified=0` row in `late_booking_baseline`; past check times fire immediately
+- **DM builder:** `buildLatebookingAlertDM(firstName, show, date, time, guestCount)` in `scheduler.js`
+- **DB table:** `late_booking_baseline(id, date, show, time, cast TEXT [JSON array], notified)`; `seedLatebookingBaseline` is idempotent (checks `COUNT(*)` before inserting)
+- **`_scheduledLatebookingChecks`:** module-level `Set` prevents double-scheduling the same row on restart
 
 ## DM forwarding
 - Non-bot non-Allen DMs → forwarded to Allen (`ALLEN_DISCORD_ID = '302924689704222723'` in `index.js`)

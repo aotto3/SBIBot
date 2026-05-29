@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-04-11
+**Last updated:** 2026-05-29
 
 ---
 
@@ -113,6 +113,11 @@ The Game ID is embedded in the post itself (not just the ephemeral reply) so it'
 **48h reminder:** if unfilled after 48 hours, posts in channel at next 8am CT check:
 - MFB / The Endings: pings only the specific unfilled Discord role(s) by role mention
 - GGB / Lucidity: pings `@here`
+- The person who posted the coverage request is **excluded** from these pings (they already know)
+
+**All-responded DMs:** when every cast member with the relevant role has reacted (✅/❌/❓), the bot:
+1. DMs the **requester** — if no one said yes, suggests reaching out to swings and contacting the cast manager
+2. DMs the **coverage manager** — lists exhausted roles, any maybes available, suggests swings, and names who originally made the request
 
 ### Show config (`lib/shows.js`)
 | Show | Roles | Role detection |
@@ -123,6 +128,26 @@ The Game ID is embedded in the post itself (not just the ephemeral reply) so it'
 | Lucidity | Riley | Auto (single role) |
 
 MFB custom server emojis: `:Dno:` `:Hno:` `:Dmaybe:` `:Hmaybe:` — **names are case-sensitive**, must match exactly in Discord server settings.
+
+### Late-booking notifications
+
+When a show has no audience bookings at 8:48am, the bot watches for last-minute bookings and alerts cast as soon as possible.
+
+**How it works:**
+1. At 8:48am, alongside the shift DMs, the bot fetches today's Bookeo schedule and records any shows with `guest_count === 0` in the `late_booking_baseline` table
+2. For each blank show, a one-time timer is set to fire 110 minutes before that show's start time (bookings close 120 min before curtain, so this is the latest practical check)
+3. When the timer fires, the bot re-fetches Bookeo and compares against the baseline — any show that now has bookings triggers a DM to every assigned cast member
+4. **Sweep-all behavior:** a single timer checks all unnotified baseline rows for that day, so a 9pm show booking at 11am gets caught when the 5pm timer fires (no separate timer needed)
+
+**Restart recovery:** on startup, any unnotified baseline rows from today reschedule their timers; past check times fire immediately.
+
+**Cast DM example:**
+> ⚡ **Last-minute booking — The Man From Beyond**
+>
+> Daphne, a **Man From Beyond** show just booked for today:
+> Friday, May 29, 2026 at 7:00 PM (12 guests)
+>
+> Reply here if you have any issues!
 
 ### Check-in system
 Cast members on eligible shows receive a green "Check in: [Show Name]" button in their daily 9am shift DM. They can also run `/check-in` directly at any time on the day of a show.
