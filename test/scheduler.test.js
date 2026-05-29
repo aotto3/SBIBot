@@ -246,6 +246,13 @@ test('planNonResponderMentions — empty member list returns empty array', () =>
   assert.deepEqual(planNonResponderMentions([], ['U1'], ['U2']), []);
 });
 
+test('planNonResponderMentions — coverage requester excluded even when silent (no reaction)', () => {
+  // The requester's ID is passed as an exclusion; they should not appear in results
+  // even though they haven't reacted, so other cast are still pinged correctly.
+  const result = planNonResponderMentions(['U-REQUESTER', 'U-OTHER'], [], ['U-REQUESTER']);
+  assert.deepEqual(result, ['U-OTHER']);
+});
+
 test('planCustomGameReminders — empty list returns empty array', () => {
   assert.deepEqual(planCustomGameReminders([]), []);
 });

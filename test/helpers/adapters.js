@@ -28,11 +28,27 @@
  *
  * Default: empty roles cache (no role targeting, falls back to @here).
  */
+/**
+ * A Map extended with Discord.js Collection methods used in production code:
+ *   .find(fn)  — like Array.find but over Map values
+ * Covers guild.roles.cache.find(...) and message.reactions.cache.find(...)
+ */
+function makeFakeCollection(entries = []) {
+  const map = new Map(entries);
+  map.find = (fn) => {
+    for (const val of map.values()) {
+      if (fn(val)) return val;
+    }
+    return undefined;
+  };
+  return map;
+}
+
 function makeFakeGuild(overrides = {}) {
   return {
     id: 'guild-test-1',
     roles: {
-      cache: new Map(),       // populate: Map<roleId, { id, name, members: Map<userId, {}> }>
+      cache: makeFakeCollection(), // populate via .set(id, { id, name, members: Map<userId, {}> })
       fetch: async () => {},
     },
     members: {
@@ -52,7 +68,7 @@ function makeFakeMessage(overrides = {}) {
   return {
     id: 'msg-test-1',
     reactions: {
-      cache: new Map(),       // populate: Map<emoji, { emoji: { name }, users: { fetch } }>
+      cache: makeFakeCollection(), // populate: map.set('✅', { emoji: { name }, users: { fetch } })
     },
     ...overrides,
   };

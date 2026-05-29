@@ -18,7 +18,7 @@ const {
   runMeetingReminderCheck, runShiftDMs,
   runCustomGameReminders, runCoverageRolePings, runEodCoverageReminder,
 } = require('../lib/scheduler');
-const { makeTestDiscordAdapter, makeTestBookeoAdapter } = require('./helpers/adapters');
+const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,32 @@ function cleanDb() {
   db.db.prepare('DELETE FROM member_links').run();
   db.db.prepare('DELETE FROM checkin_records').run();
   db.db.prepare('DELETE FROM custom_games').run();
+  db.db.prepare('DELETE FROM coverage_shifts').run();
+  db.db.prepare('DELETE FROM coverage_requests').run();
   db.db.prepare('DELETE FROM bot_config').run();
+}
+
+/**
+ * Insert a coverage request + single open shift with a Discord message ID set,
+ * so it shows up in getOpenCoverageShiftsWithRequests().
+ */
+function insertCoverageShift(overrides = {}) {
+  const requestId = db.createCoverageRequest({
+    requester_id:   overrides.requesterId  ?? 'requester-test-1',
+    requester_name: overrides.requesterName ?? 'Requester Test',
+    show:           overrides.show         ?? 'GGB',
+    character:      overrides.character    ?? null,
+    channel_id:     overrides.channelId    ?? 'channel-test-1',
+  });
+  const shiftId = db.addCoverageShift({
+    request_id: requestId,
+    date:       overrides.date ?? utils.todayCentral(),
+    time:       overrides.time ?? '19:00',
+  });
+  if (overrides.messageId) {
+    db.setCoverageShiftMessageId(shiftId, overrides.messageId);
+  }
+  return { requestId, shiftId };
 }
 
 /**
@@ -400,6 +425,88 @@ test('runCoverageRolePings — no open shifts or games: sendMessage not called',
 
   await runCoverageRolePings(discord);
   assert.equal(sent.length, 0, 'no open items → sendMessage should not be called');
+});
+
+test('runCoverageRolePings — coverage requester not mentioned even when silent', async () => {
+  cleanDb();
+
+  const REQUESTER_ID = 'user-requester-1';
+  const OTHER_ID     = 'user-other-1';
+  const MSG_ID       = 'msg-shift-test-1';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  // Guild with a "Mikey" role containing both the requester and another cast member
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-1', {
+    id: 'role-mikey-1',
+    name: 'Mikey',
+    members: new Map([
+      [REQUESTER_ID, {}],
+      [OTHER_ID,     {}],
+    ]),
+  });
+
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  // No reactions on the message — both users are silent
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:  async () => channel,
+    fetchMessage:  async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage: async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+
+  assert.equal(sent.length, 1, 'one ping message should be sent');
+  assert.ok(!sent[0].includes(`<@${REQUESTER_ID}>`), 'requester must not be pinged');
+  assert.ok(sent[0].includes(`<@${OTHER_ID}>`),     'other cast member must be pinged');
+});
+
+test('runCoverageRolePings — requester is only silent member: falls back to role ping', async () => {
+  // When the requester is the only member who hasn't responded, excluding them leaves
+  // nonResponders empty → the bot should fall back to a @role mention rather than pinging nobody.
+  cleanDb();
+
+  const REQUESTER_ID = 'user-requester-2';
+  const ROLE_ID      = 'role-mikey-2';
+  const MSG_ID       = 'msg-shift-test-2';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: MSG_ID });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set(ROLE_ID, {
+    id: ROLE_ID,
+    name: 'Mikey',
+    members: new Map([[REQUESTER_ID, {}]]),  // only member is the requester
+  });
+
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  // No reactions — requester is silent but should be excluded
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage: async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord);
+
+  assert.equal(sent.length, 1, 'one ping message should be sent');
+  assert.ok(!sent[0].includes(`<@${REQUESTER_ID}>`), 'requester must not be individually mentioned');
+  assert.ok(sent[0].includes(`<@&${ROLE_ID}>`),      'role fallback ping must be used when no non-requesters remain');
 });
 
 // ─── runEodCoverageReminder ───────────────────────────────────────────────────
