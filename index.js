@@ -58,6 +58,9 @@ client.once(Events.ClientReady, async c => {
   // ── Cleanup stale multi-role confirmation sessions (>30 min old) ──────────
   db.deleteExpiredConfirmationSessions(30 * 60);
 
+  // ── Cleanup old coverage ping message records (>30 days old) ──────────────
+  db.deleteExpiredCoveragePingMessages(30 * 24 * 60 * 60);
+
   // ── Check-in seeding & startup recovery ────────────────────────────────────
   // Seed first so check-in records exist before the 9am shift DM cron fires.
   // Starting the scheduler before seeding completes causes a race where the

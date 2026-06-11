@@ -33,6 +33,7 @@ function cleanDb() {
   db.db.prepare('DELETE FROM coverage_shifts').run();
   db.db.prepare('DELETE FROM coverage_requests').run();
   db.db.prepare('DELETE FROM late_booking_baseline').run();
+  db.db.prepare('DELETE FROM coverage_ping_messages').run();
   db.db.prepare('DELETE FROM bot_config').run();
 }
 
@@ -510,6 +511,51 @@ test('runCoverageRolePings — requester is only silent member: falls back to ro
   assert.equal(sent.length, 1, 'one ping message should be sent');
   assert.ok(!sent[0].includes(`<@${REQUESTER_ID}>`), 'requester must not be individually mentioned');
   assert.ok(sent[0].includes(`<@&${ROLE_ID}>`),      'role fallback ping must be used when no non-requesters remain');
+});
+
+test('runCoverageRolePings — ping message ID saved to repo with correct original message ID', async () => {
+  cleanDb();
+
+  const REQUESTER_ID  = 'user-requester-ping';
+  const OTHER_ID      = 'user-other-ping';
+  const ORIG_MSG_ID   = 'msg-orig-ping-test';
+  const PING_MSG_ID   = 'msg-ping-returned';
+
+  insertCoverageShift({
+    requesterId: REQUESTER_ID,
+    show:        'GGB',
+    messageId:   ORIG_MSG_ID,
+    channelId:   'channel-ping-test',
+    date:        '2026-06-15',
+    time:        '19:00',
+  });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-ping', {
+    id: 'role-mikey-ping',
+    name: 'Mikey',
+    members: new Map([[OTHER_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-ping-test' });
+
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async () => ({ id: PING_MSG_ID }),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord, repo);
+
+  const record = repo.getPingByMessageId(PING_MSG_ID);
+  assert.ok(record,                                    'ping record should exist in DB');
+  assert.equal(record.original_message_id, ORIG_MSG_ID, 'original_message_id should match the shift post');
+  assert.equal(record.show,                'GGB',        'show should be stored');
+  assert.equal(record.redirected,          0,            'redirected should default to 0');
 });
 
 // ─── runEodCoverageReminder ───────────────────────────────────────────────────

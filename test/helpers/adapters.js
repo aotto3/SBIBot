@@ -115,6 +115,8 @@ function makeTestDiscordAdapter(overrides = {}) {
     async fetchGuildRoles(_guild)               {},
     async fetchGuildMembers(_guild)             {},
     async postMeetingReminder(_m, _d, _t)       {},
+    async editMessage(_msg, _content)           {},
+    async removeReaction(_reaction, _userId)    {},
 
     // Expose stubs for per-test configuration
     _fakeGuild:   guild,

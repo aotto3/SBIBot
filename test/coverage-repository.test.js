@@ -312,3 +312,28 @@ test('hardDeleteGame — removes the game row', () => {
   repo.hardDeleteGame(id);
   assert.equal(repo.getGameById(id), undefined);
 });
+
+// ─── Coverage ping messages ───────────────────────────────────────────────────
+
+test('savePingMessage + getPingByMessageId — round-trip returns correct fields', () => {
+  repo.savePingMessage('PING1', 'ORIG1', 'CH1', 'GGB', '2026-06-15', '19:00');
+  const row = repo.getPingByMessageId('PING1');
+  assert.equal(row.ping_message_id,     'PING1');
+  assert.equal(row.original_message_id, 'ORIG1');
+  assert.equal(row.channel_id,          'CH1');
+  assert.equal(row.show,                'GGB');
+  assert.equal(row.date,                '2026-06-15');
+  assert.equal(row.time,                '19:00');
+  assert.equal(row.redirected,          0);
+});
+
+test('getPingByMessageId — returns null for unknown ID', () => {
+  assert.equal(repo.getPingByMessageId('UNKNOWN_PING'), null);
+});
+
+test('markPingRedirected — flips redirected from 0 to 1', () => {
+  repo.savePingMessage('PING2', 'ORIG2', 'CH1', 'MFB', '2026-06-16', '20:00');
+  assert.equal(repo.getPingByMessageId('PING2').redirected, 0);
+  repo.markPingRedirected('PING2');
+  assert.equal(repo.getPingByMessageId('PING2').redirected, 1);
+});
