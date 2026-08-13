@@ -19,7 +19,7 @@ const {
   runMeetingReminderCheck, runShiftDMs,
   runCustomGameReminders, runLatebookingCheck,
 } = require('../lib/scheduler');
-const { runCoverageRolePings, runEodCoverageReminder } = require('../lib/coverage-jobs');
+const { runCoverageRolePings, runEodCoverageReminder, runMaybeNudge } = require('../lib/coverage-jobs');
 const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -779,6 +779,120 @@ test('runCoverageRolePings — no maybe-reactors: possible-availability line abs
   for (const dm of dms) {
     assert.ok(!dm.content.includes('possible availability'), 'no maybe-reactors means no possible-availability line');
   }
+});
+
+// ─── runMaybeNudge ────────────────────────────────────────────────────────────
+
+/** Insert an open custom game with a Discord message so it shows up in getOpenGames(). */
+function makeGameWithMessage(overrides = {}) {
+  const id = db.createCustomGame({
+    channel_id:   overrides.channelId   ?? 'channel-test-1',
+    show:         overrides.show        ?? 'GGB',
+    date:         overrides.date        ?? utils.todayCentral(),
+    time:         overrides.time        ?? '19:00',
+    requester_id: overrides.requesterId ?? 'requester-test-1',
+  });
+  db.setCustomGameMessageId(id, overrides.messageId ?? 'game-msg-1');
+  return id;
+}
+
+/** Build a discord adapter whose single fake message carries the given reactions. */
+function adapterWithReactions(reactionEntries, capture) {
+  const guild   = makeFakeGuild();
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  for (const [key, name, users] of reactionEntries) {
+    channel._fakeMessage.reactions.cache.set(key, {
+      emoji: { name },
+      users: { fetch: async () => new Map(users.map(id => [id, { id }])) },
+    });
+  }
+  return makeTestDiscordAdapter({
+    fetchChannel:       async () => channel,
+    fetchMessage:       async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    sendDM:             async (userId, content) => capture.push({ userId, content }),
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+}
+
+test('runMaybeNudge — no open posts: sendDM not called', async () => {
+  cleanDb();
+  const dms = [];
+  await runMaybeNudge(adapterWithReactions([], dms), repo);
+  assert.equal(dms.length, 0);
+});
+
+test('runMaybeNudge — maybe reactor on an open shift is nudged; ✅ reactor is not', async () => {
+  cleanDb();
+  insertCoverageShift({ show: 'GGB', messageId: 'shift-msg-1', date: utils.todayCentral() });
+
+  const dms = [];
+  const discord = adapterWithReactions([
+    ['maybe', '❓', ['U-MAYBE']],
+    ['yes',   '✅', ['U-YES']],
+  ], dms);
+
+  await runMaybeNudge(discord, repo);
+  assert.equal(dms.length, 1, 'only the maybe reactor is nudged');
+  assert.equal(dms[0].userId, 'U-MAYBE');
+  assert.ok(dms[0].content.includes('still needs coverage'));
+});
+
+test('runMaybeNudge — open custom game is scanned (game path)', async () => {
+  cleanDb();
+  makeGameWithMessage({ show: 'GGB', messageId: 'game-msg-1', date: utils.todayCentral() });
+
+  const dms = [];
+  await runMaybeNudge(adapterWithReactions([['maybe', '❓', ['G-MAYBE']]], dms), repo);
+  assert.equal(dms.length, 1, 'maybe reactor on a custom game is nudged');
+  assert.equal(dms[0].userId, 'G-MAYBE');
+});
+
+test('runMaybeNudge — one consolidated DM when a user is maybe on a shift AND a game', async () => {
+  cleanDb();
+  insertCoverageShift({ show: 'GGB', messageId: 'shift-msg-2', date: utils.todayCentral() });
+  makeGameWithMessage({ show: 'GGB', messageId: 'game-msg-2', date: utils.todayCentral() });
+
+  const dms = [];
+  // The shared fake message carries the same maybe user for both posts.
+  await runMaybeNudge(adapterWithReactions([['maybe', '❓', ['U-BOTH']]], dms), repo);
+
+  assert.equal(dms.length, 1, 'user maybe on two posts gets exactly one DM');
+  assert.equal(dms[0].userId, 'U-BOTH');
+  const bullets = dms[0].content.split('\n').filter(l => l.startsWith('• '));
+  assert.equal(bullets.length, 2, 'consolidated DM lists both posts');
+});
+
+test('runMaybeNudge — a DM send failure does not abort the rest of the run', async () => {
+  cleanDb();
+  insertCoverageShift({ show: 'GGB', messageId: 'shift-msg-3', date: utils.todayCentral() });
+
+  const sentTo = [];
+  const guild   = makeFakeGuild();
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+  channel._fakeMessage.reactions.cache.set('maybe', {
+    emoji: { name: '❓' },
+    users: { fetch: async () => new Map([['U-A', { id: 'U-A' }], ['U-B', { id: 'U-B' }]]) },
+  });
+  const discord = makeTestDiscordAdapter({
+    fetchChannel: async () => channel, fetchMessage: async () => channel._fakeMessage,
+    fetchReactionUsers: async (r) => r.users.fetch(),
+    sendDM: async (userId) => { if (userId === 'U-A') throw new Error('DMs closed'); sentTo.push(userId); },
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  await runMaybeNudge(discord, repo);
+  assert.deepEqual(sentTo, ['U-B'], 'U-B still receives a DM despite U-A failing');
+});
+
+test('runMaybeNudge — excluded user is not nudged', async () => {
+  cleanDb();
+  db.addCoveragePingExclusion('U-EXCLUDED');
+  insertCoverageShift({ show: 'GGB', messageId: 'shift-msg-4', date: utils.todayCentral() });
+
+  const dms = [];
+  await runMaybeNudge(adapterWithReactions([['maybe', '❓', ['U-EXCLUDED', 'U-OK']]], dms), repo);
+  assert.deepEqual(dms.map(d => d.userId), ['U-OK']);
 });
 
 // ─── runLatebookingCheck ──────────────────────────────────────────────────────
