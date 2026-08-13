@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 process.env.DB_PATH = ':memory:';
 
 const db = require('../lib/db');
-const { resolveReaction, statusForEmoji, STATUS_EMOJI } = require('../lib/meeting-rsvp');
+const { resolveReaction, statusForEmoji, buildSharedRsvpTracker, STATUS_EMOJI } = require('../lib/meeting-rsvp');
 
 // ─── resolveReaction — pure conflict / cleanup logic ──────────────────────────
 
@@ -80,6 +80,32 @@ test('statusForEmoji — maps RSVP emojis, rejects others; STATUS_EMOJI is the i
   assert.equal(STATUS_EMOJI.yes, '✅');
   assert.equal(STATUS_EMOJI.no, '❌');
   assert.equal(STATUS_EMOJI.maybe, '❓');
+});
+
+// ─── buildSharedRsvpTracker ───────────────────────────────────────────────────
+
+test('buildSharedRsvpTracker — groups by status with counts and sorted names', () => {
+  const tracker = buildSharedRsvpTracker([
+    { status: 'yes',   user_id: 'U1', display_name: 'Zoe' },
+    { status: 'yes',   user_id: 'U2', display_name: 'Amy' },
+    { status: 'no',    user_id: 'U3', display_name: 'Bob' },
+    { status: 'maybe', user_id: 'U4', display_name: 'Cara' },
+  ]);
+  assert.ok(tracker.includes('✅ **Attending (2):** Amy, Zoe'), 'attending sorted with count');
+  assert.ok(tracker.includes('❌ **Not attending (1):** Bob'));
+  assert.ok(tracker.includes('❓ **Maybe (1):** Cara'));
+});
+
+test('buildSharedRsvpTracker — empty state shows "none yet" for each bucket', () => {
+  const tracker = buildSharedRsvpTracker([]);
+  assert.ok(tracker.includes('Attending (0):** _none yet_'));
+  assert.ok(tracker.includes('Not attending (0):** _none yet_'));
+  assert.ok(tracker.includes('Maybe (0):** _none yet_'));
+});
+
+test('buildSharedRsvpTracker — falls back to user_id when display_name is missing', () => {
+  const tracker = buildSharedRsvpTracker([{ status: 'yes', user_id: 'U-RAW', display_name: null }]);
+  assert.ok(tracker.includes('U-RAW'));
 });
 
 // ─── meeting_rsvps — DB round-trip ────────────────────────────────────────────

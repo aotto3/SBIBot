@@ -120,7 +120,7 @@ client.on(Events.MessageCreate, async message => {
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   try {
-    await handleReactionChange(client, reaction, user);
+    await handleReactionChange(client, reaction, user, 'add');
   } catch (err) {
     console.error('[rsvp] Unhandled error on reaction add:', err);
   }
@@ -128,7 +128,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 
 client.on(Events.MessageReactionRemove, async (reaction, user) => {
   try {
-    await handleReactionChange(client, reaction, user);
+    await handleReactionChange(client, reaction, user, 'remove');
   } catch (err) {
     console.error('[rsvp] Unhandled error on reaction remove:', err);
   }

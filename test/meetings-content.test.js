@@ -81,7 +81,11 @@ function makeFakeClient() {
       const id  = `msg${++counter}`;
       const rec = { id, content, reactions: [] };
       sent.push(rec);
-      const msg = { id, content, reactions: { cache: coll() }, async react(e) { rec.reactions.push(e); } };
+      const msg = {
+        id, content, reactions: { cache: coll() },
+        async react(e) { rec.reactions.push(e); },
+        async edit(newContent) { rec.content = newContent; this.content = newContent; },
+      };
       messagesById.set(id, msg);
       return msg;
     },
@@ -112,24 +116,26 @@ test('postMeetingReminder — monthly 7d is posted as an RSVP post (reactions ad
   assert.equal(rec.message_id, client._sent[0].id, '7d post recorded with its message id');
 });
 
-test('postMeetingReminder — monthly 24h links to the 7d post and lists its attendees', async () => {
+test('postMeetingReminder — monthly 24h is its own RSVP post, links to 7d, shows shared RSVPs', async () => {
   const id = insertMonthlyMeeting();
   const meeting = db.getMeeting(id);
   const client = makeFakeClient();
 
-  // Post the 7d first, then add a ✅ reactor to it.
+  // Post the 7d first (records its message id).
   await postMeetingReminder(client, meeting, '2026-05-05', '7d');
-  const sevenDayId  = client._sent[0].id;
-  const sevenDayMsg = client._messagesById.get(sevenDayId);
-  sevenDayMsg.reactions.cache.set('✅', { emoji: { name: '✅' }, users: { fetch: async () => coll([['U1', { id: 'U1', bot: false }]]) } });
+  const sevenDayId = client._sent[0].id;
+
+  // Simulate an RSVP already made on the 7d post during the week.
+  db.setMeetingRsvp(id, '2026-05-05', 'U1', 'yes', '7d', Date.now(), 'Alice');
 
   await postMeetingReminder(client, meeting, '2026-05-05', '24h');
 
   const h24 = client._sent[1];
+  assert.ok(h24.content.includes('React to RSVP'), '24h carries its own RSVP prompt');
+  assert.deepEqual(h24.reactions, ['✅', '❌', '❓'], '24h gets its own reactions');
   assert.ok(h24.content.includes(`/${sevenDayId}`), '24h links to the 7d post');
-  assert.ok(h24.content.includes('Attending (so far): <@U1>'), '24h lists the 7d post attendees');
-  assert.ok(!h24.content.includes('React to RSVP'), '24h is a follow-up, not its own RSVP post');
-  assert.deepEqual(h24.reactions, [], '24h gets no reactions in this slice');
+  assert.ok(h24.content.includes('Attending (1)') && h24.content.includes('Alice'),
+    '24h shows the shared RSVP state on post');
 });
 
 test('postMeetingReminder — one-time 7d is unchanged (follow-up, no reactions)', async () => {

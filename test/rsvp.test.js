@@ -25,7 +25,19 @@ function cleanDb() {
   db.db.prepare('DELETE FROM coverage_shifts').run();
   db.db.prepare('DELETE FROM custom_games').run();
   db.db.prepare('DELETE FROM coverage_ping_messages').run();
+  db.db.prepare('DELETE FROM meeting_rsvps').run();
   db.db.prepare('DELETE FROM meeting_reminders_sent').run();
+  db.db.prepare('DELETE FROM meeting_members').run();
+  db.db.prepare('DELETE FROM meetings').run();
+}
+
+/** A Map with the Discord.js Collection methods the rsvp code uses. */
+function coll(entries = []) {
+  const m = new Map(entries);
+  m.find   = (fn) => { for (const v of m.values()) if (fn(v)) return v; return undefined; };
+  m.filter = (fn) => coll([...m.entries()].filter(([, v]) => fn(v)));
+  m.map    = (fn) => [...m.values()].map(fn);
+  return m;
 }
 
 /**
@@ -149,4 +161,122 @@ test('ping redirect — DM failure is non-blocking: reaction removed and message
   assert.equal(removed.length, 1, 'reaction should still be removed even when DM fails');
   assert.equal(dms.length,    0, 'DM should not appear in spy (it threw)');
   assert.equal(edited.length, 1, 'message should still be edited even when DM fails');
+});
+
+// ─── Monthly recurring shared-RSVP reactions ──────────────────────────────────
+
+/**
+ * Seed a monthly meeting with recorded 7d + 24h posts and return fake Discord
+ * objects: the two post messages, a channel that fetches them, and a reactedFrom
+ * spy of stale-reaction removals.
+ */
+function makeMonthlySetup() {
+  const meetingId = db.createMeeting({
+    title: 'Board', time: '19:00', duration: 60, date: null,
+    recurrence_type: 'monthly_weekday', recurrence_day: 'tuesday', recurrence_week: 'first',
+    channel_id: 'C1', target_type: 'here', reminder_7d: 1, reminder_24h: 1,
+  });
+  db.markReminderSent(meetingId, '2026-05-05', '7d',  'M7');
+  db.markReminderSent(meetingId, '2026-05-05', '24h', 'M24');
+
+  const removedFrom = [];
+  const messages = new Map();
+  const channel = { messages: { fetch: async (id) => { const m = messages.get(id); if (!m) throw new Error(`no msg ${id}`); return m; } } };
+
+  function makeMsg(id) {
+    const msg = {
+      id, partial: false, content: `header ${id}`,
+      guild: { id: 'G1', members: { cache: new Map() } },
+      channel, reactions: { cache: coll() },
+      edit: async (c) => { msg.content = c; },
+    };
+    messages.set(id, msg);
+    return msg;
+  }
+  const m7  = makeMsg('M7');
+  const m24 = makeMsg('M24');
+
+  /** Give a message a physical reaction whose removal is tracked. */
+  function physicalReaction(msg, emojiName, userId) {
+    msg.reactions.cache.set(emojiName, {
+      emoji: { name: emojiName },
+      users: { remove: async (uid) => { removedFrom.push({ messageId: msg.id, emoji: emojiName, userId: uid }); } },
+    });
+  }
+
+  return { meetingId, m7, m24, removedFrom, physicalReaction };
+}
+
+function reactOn(msg, emojiName, user, action = 'add') {
+  const reaction = { partial: false, emoji: { name: emojiName }, message: msg,
+    users: { remove: async () => {}, fetch: async () => coll([[user.id, user]]) } };
+  return handleReactionChange({}, reaction, user, action);
+}
+
+test('monthly RSVP — reacting ✅ on the 7d post records shared state and renders both posts', async () => {
+  cleanDb();
+  const { meetingId, m7, m24 } = makeMonthlySetup();
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+
+  await reactOn(m7, '✅', user, 'add');
+
+  const row = db.getMeetingRsvp(meetingId, '2026-05-05', 'U1');
+  assert.equal(row.status, 'yes');
+  assert.equal(row.post,   '7d');
+  assert.ok(m7.content.includes('Attending (1)')  && m7.content.includes('Alice'), '7d tracker rendered');
+  assert.ok(m24.content.includes('Attending (1)') && m24.content.includes('Alice'), '24h tracker kept in sync');
+});
+
+test('monthly RSVP — changing to ❌ on the 24h post flips status and cleans the stale ✅ off the 7d post', async () => {
+  cleanDb();
+  const { meetingId, m7, m24, removedFrom, physicalReaction } = makeMonthlySetup();
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+
+  physicalReaction(m7, '✅', 'U1');       // the ✅ they placed on the 7d post
+  await reactOn(m7,  '✅', user, 'add');   // status yes/7d
+  await reactOn(m24, '❌', user, 'add');   // change mind on the 24h post
+
+  const row = db.getMeetingRsvp(meetingId, '2026-05-05', 'U1');
+  assert.equal(row.status, 'no');
+  assert.equal(row.post,   '24h');
+  assert.ok(removedFrom.some(r => r.messageId === 'M7' && r.emoji === '✅' && r.userId === 'U1'),
+    'stale ✅ removed from the 7d post');
+  assert.ok(m7.content.includes('Not attending (1)') && m7.content.includes('Attending (0)'), 'both posts show No');
+  assert.ok(m24.content.includes('Not attending (1)'));
+});
+
+test('monthly RSVP — removing the current reaction clears the RSVP', async () => {
+  cleanDb();
+  const { meetingId, m7 } = makeMonthlySetup();
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+
+  await reactOn(m7, '✅', user, 'add');
+  await reactOn(m7, '✅', user, 'remove');
+
+  assert.equal(db.getMeetingRsvp(meetingId, '2026-05-05', 'U1'), null, 'RSVP cleared');
+  assert.ok(m7.content.includes('Attending (0):** _none yet_'), 'tracker shows none');
+});
+
+test('monthly RSVP — a non-monthly meeting post still uses the single-message tracker', async () => {
+  cleanDb();
+  const meetingId = db.createMeeting({
+    title: 'Kickoff', time: '19:00', duration: 60, date: '2026-05-05',
+    recurrence_type: null, recurrence_day: null, recurrence_week: null,
+    channel_id: 'C1', target_type: 'here', reminder_7d: 1, reminder_24h: 1,
+  });
+  db.markReminderSent(meetingId, '2026-05-05', 'created', 'MC');
+
+  const channel = {};
+  const msg = {
+    id: 'MC', partial: false, content: 'header', guild: { id: 'G1', members: { cache: new Map() } },
+    channel, reactions: { cache: coll() }, edit: async (c) => { msg.content = c; },
+  };
+  msg.reactions.cache.set('✅', { emoji: { name: '✅' }, users: { fetch: async () => coll([['U1', { id: 'U1', bot: false, username: 'Alice' }]]) } });
+
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+  const reaction = { partial: false, emoji: { name: '✅' }, message: msg, users: { fetch: async () => coll([['U1', user]]) } };
+  await handleReactionChange({}, reaction, user, 'add');
+
+  assert.ok(msg.content.includes('Attending'), 'legacy tracker rendered from the message reactions');
+  assert.equal(db.getMeetingRsvp(meetingId, '2026-05-05', 'U1'), null, 'no shared-state row for non-monthly posts');
 });
