@@ -136,6 +136,76 @@ test('planMeetingReminders — monthly_weekday: last weekday of month, month bou
 });
 
 
+// ─── planMeetingReminders — catch-up window (monthly recurring only) ──────────
+
+// A hasSent predicate backed by a Set of "id|date|window" keys.
+function sentSet(...keys) {
+  const s = new Set(keys);
+  return (id, date, window) => s.has(`${id}|${date}|${window}`);
+}
+
+test('planMeetingReminders — monthly catch-up: 7d self-heals when occurrence is 5 days out and unsent', () => {
+  // First Tuesday of May 2026 = May 5. today = April 30 → 5 days out (the exact April 28 mark was missed).
+  // Old exact-day logic would NOT fire here; catch-up must.
+  const today   = new Date(2026, 3, 30); // Thu April 30
+  const meeting = monthlyMeeting('tuesday', 'first');
+  const result  = planMeetingReminders([meeting], today);
+  const item7d  = result.find(r => r.window === '7d');
+  assert.ok(item7d, '7d should self-heal and fire within the window');
+  assert.equal(item7d.dateStr, '2026-05-05');
+});
+
+test('planMeetingReminders — monthly catch-up: 7d does NOT re-fire once already sent', () => {
+  const today   = new Date(2026, 3, 30);
+  const meeting = monthlyMeeting('tuesday', 'first'); // id 2
+  const already = sentSet('2|2026-05-05|7d');
+  const result  = planMeetingReminders([meeting], today, already);
+  assert.equal(result.filter(r => r.window === '7d').length, 0, 'already-sent 7d must not double-post');
+});
+
+test('planMeetingReminders — monthly catch-up: 24h fires on the occurrence day when unsent', () => {
+  // Occurrence May 5; today = May 5 (0 days) — 24h never fired earlier (e.g. restart). Should catch up.
+  const today   = new Date(2026, 4, 5); // Tue May 5
+  const meeting = monthlyMeeting('tuesday', 'first');
+  const result  = planMeetingReminders([meeting], today);
+  const item24h = result.find(r => r.window === '24h');
+  assert.ok(item24h, '24h should catch up on the day-of when unsent');
+  assert.equal(item24h.dateStr, '2026-05-05');
+});
+
+test('planMeetingReminders — monthly catch-up: 24h suppressed once sent', () => {
+  const today   = new Date(2026, 4, 5);
+  const meeting = monthlyMeeting('tuesday', 'first');
+  const already = sentSet('2|2026-05-05|24h');
+  const result  = planMeetingReminders([meeting], today, already);
+  assert.equal(result.filter(r => r.window === '24h').length, 0);
+});
+
+test('planMeetingReminders — monthly: a first occurrence already <7 days away still gets its 7d post', () => {
+  // Meeting scheduled ~3 days before its occurrence. Occurrence May 5; today = May 2 (3 days out).
+  const today   = new Date(2026, 4, 2); // Sat May 2
+  const meeting = monthlyMeeting('tuesday', 'first');
+  const result  = planMeetingReminders([meeting], today);
+  assert.ok(result.find(r => r.window === '7d'), 'a soon first occurrence still gets the 7d RSVP post');
+});
+
+test('planMeetingReminders — monthly: nothing fires when occurrence is more than 7 days out', () => {
+  // today = April 20 → next first-Tuesday is May 5 = 15 days out → outside the window.
+  const today   = new Date(2026, 3, 20);
+  const meeting = monthlyMeeting('tuesday', 'first');
+  const result  = planMeetingReminders([meeting], today);
+  assert.equal(result.length, 0, 'no reminder more than 7 days ahead of the occurrence');
+});
+
+test('planMeetingReminders — weekly is unchanged: no catch-up firing off the exact day', () => {
+  // Weekly Tuesday, today = Thursday April 9 (5 days before next Tuesday). Old exact-day: today+7 = Thu ≠ Tue → no 7d.
+  const today   = new Date(2026, 3, 9); // Thu April 9 2026
+  const meeting = weeklyMeeting('tuesday');
+  const result  = planMeetingReminders([meeting], today);
+  assert.equal(result.filter(r => r.window === '7d').length, 0, 'weekly must not gain catch-up behavior');
+});
+
+
 // ─── planExpiredMeetings ──────────────────────────────────────────────────────
 
 test('planExpiredMeetings — returns one-time meeting whose date is before today', () => {
