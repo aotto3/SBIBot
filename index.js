@@ -19,6 +19,11 @@ const utils   = require('./lib/utils');
 const { handleCoverageRequestModal } = require('./commands/coverage-request');
 const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit, handleCovCancelButton } = require('./lib/confirm');
 const { openDMChannels } = require('./lib/dm-channels');
+const { makeDiscordAdapter } = require('./lib/adapters/discord');
+const { makeDashboardServer } = require('./lib/dashboard/server');
+const dashboardRepo = require('./lib/dashboard-repository');
+const audit = require('./lib/audit-log');
+const cfg = require('./lib/config');
 const fs   = require('fs');
 const path = require('path');
 
@@ -71,6 +76,32 @@ client.once(Events.ClientReady, async c => {
 
   openDMChannels(client).catch(err => console.error('[dm-channels] Unexpected startup error:', err));
   require('./lib/scheduler').start(client);
+
+  // ── Admin dashboard (embedded HTTP server) ────────────────────────────────
+  // Fail-safe: only starts when DASHBOARD_SECRET (and a PORT) are set. Until
+  // Allen sets the secret + enables a public domain in Railway, the bot exposes
+  // no port and behaves exactly as before.
+  const dashboardSecret = process.env.DASHBOARD_SECRET;
+  const dashboardPort   = process.env.PORT;
+  if (!dashboardSecret) {
+    console.log('[dashboard] DASHBOARD_SECRET not set — dashboard disabled');
+  } else if (!dashboardPort) {
+    console.log('[dashboard] PORT not set — dashboard disabled');
+  } else {
+    try {
+      const dashboard = makeDashboardServer({
+        discord:    makeDiscordAdapter(client),
+        repo:       dashboardRepo,
+        config:     cfg,
+        audit,
+        secret:     dashboardSecret,
+        operatorId: ALLEN_DISCORD_ID,
+      });
+      await dashboard.start(dashboardPort);
+    } catch (err) {
+      console.error('[dashboard] Failed to start:', err);
+    }
+  }
 
   // ── Startup notification ────────────────────────────────────────────────────
   // DMs Allen when the bot comes online — confirms the bot→Allen DM channel
