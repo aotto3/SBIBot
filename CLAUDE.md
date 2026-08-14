@@ -5,7 +5,8 @@ See RULES.md for operational rules with feedback tracking.
 ## Commands
 - Start: `node index.js` / `npm start`
 - Register commands: `node deploy-commands.js` / `npm run deploy-commands` — re-run on any add/rename/option change
-- Tests: `npm test` (runs all `test/*.test.js` — 10 files, 278 tests)
+- Tests: `npm test` (runs all `test/*.test.js` — 16 files, 316 tests)
+  - Add `--test-force-exit` when running the full suite directly (`node --test --test-force-exit test/*.test.js`): `checkin.test.js`'s `scheduleAlerts` leaves real timers pending that otherwise hang the runner after tests pass.
 
 ## Env vars
 DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID, BOOKEO_API_URL, BOOKEO_API_KEY
@@ -98,6 +99,18 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - **DM builder:** `buildLatebookingAlertDM(firstName, show, date, time, guestCount)` in `scheduler.js`
 - **DB table:** `late_booking_baseline(id, date, show, time, cast TEXT [JSON array], notified)`; `seedLatebookingBaseline` is idempotent (checks `COUNT(*)` before inserting)
 - **`_scheduledLatebookingChecks`:** module-level `Set` prevents double-scheduling the same row on restart
+
+## Admin dashboard (v1 — issue #113; skeleton #114)
+- Embedded Express 5 server started **inside the bot process** from `index.js` (after `scheduler.start`), listening on `process.env.PORT`. Single operator (Allen). Server-rendered HTML, no SPA/build step.
+- **Fail-safe:** starts only when `DASHBOARD_SECRET` **and** `PORT` are set — otherwise it logs `dashboard disabled` and the bot runs unchanged. Needs a Railway public domain (one-time setup).
+- **Adapter-only Discord access:** the web layer never touches the raw client — it goes through `makeDiscordAdapter` (`sendDM` for the login-alert, `getStatus()` for health). Same for the DB via `lib/dashboard-repository.js`.
+- `makeDashboardServer({ discord, repo, config, audit, secret, operatorId })` in `lib/dashboard/server.js` → `{ app, start(port), stop() }`. Dependency-injected, same style as the adapters.
+- **Modular routing:** `lib/dashboard/routes/{index,auth-routes,health-routes}.js` — one router per feature; add new slice routers under the auth guard in `routes/index.js`.
+- **Auth (`lib/dashboard/auth.js`, pure + unit-tested):** `verifyToken` (timing-safe, SHA-256 + `timingSafeEqual`), `signSession`/`verifySession` (HMAC-signed cookie, 30-day TTL). Cookie `sbi_dash_session`, httpOnly + SameSite=strict.
+- **Middleware (`lib/dashboard/middleware.js`, thin/untested):** auth guard, general action-keyed rate limiter (`limit('login')` now; reuse for v2 sends), stateless CSRF (`_csrf` field derived from session+secret) on state-changing POSTs. Login POST is CSRF-exempt (no session yet) — protected by secret + rate-limit + SameSite.
+- **Audit log:** `audit_log(id, action, params, result, message_id, created_at)` table in `db.js`; `lib/audit-log.js` `record(action, params, result, messageId?)` + `list(limit)` (JSON-serializes params/result). `message_id` column exists for v2 undo. Every write action (links #116, config #120, triggers #121) records here.
+- **Login-alert:** successful login DMs `ALLEN_DISCORD_ID` via `adapter.sendDM` (fire-and-forget) — security tripwire + proof of the dashboard→Discord send path.
+- Views in `lib/dashboard/views.js` (`layout`/`loginPage`/`healthPage`) — responsive, phone-legible, `<meta http-equiv=refresh>` polling. State changes are POST-only.
 
 ## DM forwarding
 - Non-bot non-Allen DMs → forwarded to Allen (`ALLEN_DISCORD_ID = '302924689704222723'` in `index.js`)
