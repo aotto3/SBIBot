@@ -153,6 +153,17 @@ Lists every open coverage shift and custom game in one private view, with **Canc
 
 Use this to get a quick summary of everything outstanding, or to confirm/cancel without hunting through channels.
 
+**`/list-outstanding-requests [show:X]`**
+A read-only overview of everything still outstanding — open coverage shifts and custom games that haven't been filled, confirmed, or cancelled, and whose date hasn't passed. Results are grouped into one section per show, sorted soonest-first, with a jump link to each post. Add `show:` to limit to a single show; omit it for all shows.
+
+Each row shows a status marker:
+- 🔴 **needs coverage** (shift) / **unfilled** (game) — nobody has stepped up yet
+- 🟡 **ready to fill — awaiting confirmation** (shift) / **filled — awaiting confirmation** (game) — someone has, but it isn't finalized
+
+Rows are labeled `Shift #N` or `Game #N` so you know which ID to use with `/cancel-coverage-request`, `/cancel-custom-game`, or `/purge`.
+
+> **`/open-coverage` vs `/list-outstanding-requests`:** use `/open-coverage` when you want to **act** (Cancel/Confirm buttons); use `/list-outstanding-requests` when you just want to **see** what's outstanding — with statuses, per-show filtering, and links.
+
 ### Channel Configuration
 
 **`/set-coverage-channel`**
@@ -231,7 +242,8 @@ If the Discord post was already manually deleted, the purge still cleans up the 
 | `/cancel-custom-game` | Cancel a custom game and delete its post |
 | `/coverage-request` | (Cast member) Submit a coverage request |
 | `/cancel-coverage-request` | Cancel a single coverage shift by Shift ID |
-| `/open-coverage` | View and manage all open requests and games |
+| `/open-coverage` | View and manage (Cancel/Confirm) all open requests and games |
+| `/list-outstanding-requests` | Read-only list of outstanding shifts + games, per-show, with links |
 | `/set-coverage-channel` | Set the coverage channel for a show/character |
 | `/list-coverage-channels` | List all configured coverage channels |
 | `/set-coverage-manager` | Set who receives fillable DMs and EOD summary |
