@@ -17,7 +17,7 @@ const assert = require('node:assert/strict');
 process.env.DB_PATH = ':memory:';
 
 const repo = require('../lib/coverage-repository');
-const { buildOutstandingEmbeds } = require('../lib/coverage');
+const { buildOutstandingEmbeds, buildOutstandingEmptyState } = require('../lib/coverage');
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────
 
@@ -166,6 +166,40 @@ test('getOutstandingGames — includes a filled-but-unconfirmed game with filled
   const found = rows.find(r => r.id === id);
   assert.ok(found, 'filled-but-unconfirmed game should still appear');
   assert.ok(found.filled_at, 'filled_at should be populated');
+});
+
+// ─── show filter (slice 3) ────────────────────────────────────────────────────
+
+test('getOutstandingShifts — show filter returns only that show; omitted returns all', () => {
+  const ggb = seedShift(seedRequest({ show: 'GGB' }), { date: '2026-06-01', time: '19:00' });
+  const mfb = seedShift(seedRequest({ show: 'MFB', character: 'Daphne' }), { date: '2026-06-01', time: '19:00' });
+
+  const filtered = repo.getOutstandingShifts(PAST_TODAY, 'GGB');
+  assert.ok(filtered.some(r => r.id === ggb),  'GGB shift should appear when filtered to GGB');
+  assert.ok(!filtered.some(r => r.id === mfb), 'MFB shift should not appear when filtered to GGB');
+
+  const all = repo.getOutstandingShifts(PAST_TODAY);
+  assert.ok(all.some(r => r.id === ggb) && all.some(r => r.id === mfb), 'both appear with no filter');
+});
+
+test('getOutstandingGames — show filter returns only that show', () => {
+  const ggb = seedGame({ show: 'GGB' }); repo.setGameMessageId(ggb, 'FG1');
+  const mfb = seedGame({ show: 'MFB' }); repo.setGameMessageId(mfb, 'FG2');
+
+  const filtered = repo.getOutstandingGames(PAST_TODAY, 'MFB');
+  assert.ok(filtered.some(r => r.id === mfb),  'MFB game should appear when filtered to MFB');
+  assert.ok(!filtered.some(r => r.id === ggb), 'GGB game should not appear when filtered to MFB');
+});
+
+test('buildOutstandingEmptyState — generic line when no show label', () => {
+  assert.equal(buildOutstandingEmptyState(), '✅ No outstanding requests.');
+});
+
+test('buildOutstandingEmptyState — names the show when a label is given', () => {
+  assert.equal(
+    buildOutstandingEmptyState('Great Gold Bird'),
+    '✅ No outstanding requests for Great Gold Bird.',
+  );
 });
 
 // ─── buildOutstandingEmbeds ───────────────────────────────────────────────────
