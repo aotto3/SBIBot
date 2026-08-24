@@ -15,6 +15,9 @@ const HELP_TEXT = `📋 **SBIBot Commands**
 \`/custom-game\` — Post availability check for a show (MFB, Endings, GGB, Lucidity)
 \`/cancel-custom-game\` — Close a custom game availability post
 
+**Coverage** 🔒
+\`/list-outstanding-requests\` — List outstanding coverage shifts & custom games (optional show filter)
+
 **Schedules** 🔒
 \`/schedule\` — Show full schedule for the coming week
 \`/member-schedule\` — Show one cast member's upcoming shifts

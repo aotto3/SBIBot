@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-05-29
+**Last updated:** 2026-08-24
 
 ---
 
@@ -172,6 +172,7 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 - `lib/coverage-repository.js` — wraps all coverage DB calls behind a clean named interface; used by `rsvp.js` and `coverage-jobs.js` instead of calling `db` directly
 - `lib/coverage-jobs.js` — `runCoverageRolePings(discord, repo)` (8am role pings) and `runEodCoverageReminder(discord, repo)` (9pm EOD DMs); `scheduler.js` is a thin orchestrator that imports and calls these
 - `lib/coverage-session.js` — multi-role confirmation state is DB-backed (`coverage_confirmation_sessions` table) so partial selections survive bot restarts; sessions expire after 30 minutes (checked at read time + startup cleanup)
+- `/list-outstanding-requests` (admin, ephemeral) — read-only list of outstanding coverage shifts + custom games (open, not filled/confirmed/cancelled, date-not-passed), grouped per show, optional `show` filter, 🔴/🟡 status, jump link per row. Pure `coverage.buildOutstandingEmbeds` / `buildOutstandingEmptyState`; date-filtered `db.getOutstandingCoverageShifts` / `db.getOutstandingCustomGames` (separate from the 8am-ping queries). PRD #124, slices #125–#127.
 
 ### Misc
 - `/help` — ephemeral command list, available to all members

@@ -144,6 +144,24 @@ Cancel a custom game availability post. **Deletes the original post** from the c
 
 ---
 
+## Coverage Requests
+
+### `/list-outstanding-requests` 🔒
+A private, read-only overview of everything still outstanding — open **coverage shifts** and **custom games** that haven't been filled, confirmed, or cancelled, and whose date hasn't passed. Grouped one section per show, sorted soonest-first, with a jump link to each post.
+
+| Option | Required | Example |
+|---|---|---|
+| `show` | optional | Man From Beyond · The Endings · Great Gold Bird · Lucidity (omit for **all shows**) |
+
+**Each row shows:**
+- A status marker — 🔴 **needs coverage** / **unfilled** (nobody yet) or 🟡 **awaiting confirmation** (someone stepped up, not finalized)
+- The type and ID — `Shift #N` or `Game #N` — for use with `/cancel-coverage-request`, `/cancel-custom-game`, or `/purge`
+- Date, time, character (multi-role shows only), the requester, and a **link to the post**
+
+> **`/open-coverage` vs `/list-outstanding-requests`:** `/open-coverage` gives you **Cancel/Confirm buttons** to act on items; `/list-outstanding-requests` is a **read-only** list you can filter by show — best for a quick "what's still open?" scan with links.
+
+---
+
 ## Schedules & Shift Reminders
 
 ### `/schedule` 🔒
@@ -318,6 +336,7 @@ Turn automated shift DM features on or off.
 | See who's coming to a meeting | `/attendance` |
 | Ask who's free for a custom game | `/custom-game` |
 | Cancel and delete a custom game post | `/cancel-custom-game` |
+| See everything still outstanding (shifts + games) | `/list-outstanding-requests` |
 | See this week's show schedule | `/schedule` |
 | See someone's upcoming shifts | `/member-schedule` |
 | Send or preview shift DMs | `/send-shift-reminders` |
