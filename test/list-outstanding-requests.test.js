@@ -36,7 +36,18 @@ function seedShift(requestId, overrides = {}) {
   return repo.addShift({ request_id: requestId, date: '2026-06-01', time: '19:00', ...overrides });
 }
 
-// A "today" far in the past so seeded 2026-06-01 shifts count as future.
+function seedGame(overrides = {}) {
+  return repo.createGame({
+    channel_id:   'C2',
+    show:         'GGB',
+    date:         '2026-06-01',
+    time:         '19:00',
+    requester_id: 'U100',
+    ...overrides,
+  });
+}
+
+// A "today" far in the past so seeded 2026-06-01 rows count as future.
 const PAST_TODAY = '2026-01-01';
 
 // ─── getOutstandingShifts ─────────────────────────────────────────────────────
@@ -97,6 +108,64 @@ test('getOutstandingShifts — reflects fillable_notified state', () => {
   const rows = repo.getOutstandingShifts(PAST_TODAY);
   assert.equal(rows.find(r => r.id === plain).fillable_notified,    0);
   assert.equal(rows.find(r => r.id === notified).fillable_notified, 1);
+});
+
+// ─── getOutstandingGames ──────────────────────────────────────────────────────
+
+test('getOutstandingGames — returns an unconfirmed posted future-dated game with its fields', () => {
+  const id = seedGame({ show: 'GGB', channel_id: 'C7', requester_id: 'U55', date: '2026-06-01', time: '20:00' });
+  repo.setGameMessageId(id, 'GMSG1');
+
+  const rows  = repo.getOutstandingGames(PAST_TODAY);
+  const found = rows.find(r => r.id === id);
+
+  assert.ok(found, 'should include the unconfirmed posted game');
+  assert.equal(found.show,         'GGB');
+  assert.equal(found.channel_id,   'C7');
+  assert.equal(found.requester_id, 'U55');
+  assert.equal(found.date,         '2026-06-01');
+  assert.equal(found.time,         '20:00');
+  assert.equal(found.message_id,   'GMSG1');
+  assert.equal(found.filled_at,    null);
+});
+
+test('getOutstandingGames — excludes confirmed games', () => {
+  const id = seedGame();
+  repo.setGameMessageId(id, 'GMSG2');
+  repo.confirmGame(id);
+  const rows = repo.getOutstandingGames(PAST_TODAY);
+  assert.ok(!rows.some(r => r.id === id), 'confirmed game should not appear');
+});
+
+test('getOutstandingGames — excludes cancelled (deactivated) games', () => {
+  const id = seedGame();
+  repo.setGameMessageId(id, 'GMSG3');
+  repo.deactivateGame(id); // sets both filled_at and confirmed_at
+  const rows = repo.getOutstandingGames(PAST_TODAY);
+  assert.ok(!rows.some(r => r.id === id), 'cancelled game should not appear');
+});
+
+test('getOutstandingGames — excludes never-posted games (no message_id)', () => {
+  const id = seedGame(); // no setGameMessageId
+  const rows = repo.getOutstandingGames(PAST_TODAY);
+  assert.ok(!rows.some(r => r.id === id), 'unposted game should not appear');
+});
+
+test('getOutstandingGames — excludes past-dated games', () => {
+  const id = seedGame({ date: '2026-06-01' });
+  repo.setGameMessageId(id, 'GMSG4');
+  const rows = repo.getOutstandingGames('2026-06-02');
+  assert.ok(!rows.some(r => r.id === id), 'past-dated game should not appear');
+});
+
+test('getOutstandingGames — includes a filled-but-unconfirmed game with filled_at set', () => {
+  const id = seedGame();
+  repo.setGameMessageId(id, 'GMSG5');
+  repo.markGameFilled(id); // filled_at set, confirmed_at still null
+  const rows  = repo.getOutstandingGames(PAST_TODAY);
+  const found = rows.find(r => r.id === id);
+  assert.ok(found, 'filled-but-unconfirmed game should still appear');
+  assert.ok(found.filled_at, 'filled_at should be populated');
 });
 
 // ─── buildOutstandingEmbeds ───────────────────────────────────────────────────
@@ -179,6 +248,48 @@ test('buildOutstandingEmbeds — sorts rows within a show by date then time', ()
   const desc = embeds[0].description;
   const order = ['#3', '#2', '#1'].map(tag => desc.indexOf(tag));
   assert.ok(order[0] < order[1] && order[1] < order[2], 'rows should be date-then-time ascending');
+});
+
+function gameRow(overrides = {}) {
+  return {
+    id: 5, show: 'GGB', date: '2026-06-01', time: '20:00',
+    filled_at: null, requester_id: 'U100', channel_id: 'C2', message_id: 'GM1',
+    ...overrides,
+  };
+}
+
+test('buildOutstandingEmbeds — one custom game renders a 🔴 unfilled row with mention and link', () => {
+  const desc = buildOutstandingEmbeds([], [gameRow()], GUILD)[0].description;
+  assert.ok(desc.includes('🔴'),        'should show red marker');
+  assert.ok(desc.includes('Game #5'),   'should include the game ID');
+  assert.ok(desc.includes('unfilled'),  'should show unfilled status');
+  assert.ok(desc.includes('8:00 PM'),   'should include the formatted time');
+  assert.ok(desc.includes('<@U100>'),   'should mention the requester');
+  assert.ok(desc.includes('https://discord.com/channels/G1/C2/GM1'), 'should include the jump link');
+});
+
+test('buildOutstandingEmbeds — filled custom game renders 🟡 awaiting confirmation', () => {
+  const desc = buildOutstandingEmbeds([], [gameRow({ filled_at: 1712345678 })], GUILD)[0].description;
+  assert.ok(desc.includes('🟡'),                    'should show yellow marker');
+  assert.ok(desc.includes('filled'),                'should show filled status');
+  assert.ok(desc.includes('awaiting confirmation'), 'should note awaiting confirmation');
+});
+
+test('buildOutstandingEmbeds — game with null requester_id omits the req segment', () => {
+  const desc = buildOutstandingEmbeds([], [gameRow({ requester_id: null })], GUILD)[0].description;
+  assert.ok(!desc.includes('<@'),  'should not render a mention');
+  assert.ok(!desc.includes('req'), 'should not render a req segment');
+});
+
+test('buildOutstandingEmbeds — interleaves coverage shifts and games by date within a show', () => {
+  const embeds = buildOutstandingEmbeds(
+    [shiftRow({ id: 1, show: 'GGB', date: '2026-06-02', time: '19:00' })],
+    [gameRow({ id: 2, show: 'GGB', date: '2026-06-01', time: '19:00' })],
+    GUILD,
+  );
+  assert.equal(embeds.length, 1, 'same show → single embed');
+  const desc = embeds[0].description;
+  assert.ok(desc.indexOf('Game #2') < desc.indexOf('Shift #1'), 'earlier-dated game should sort before later shift');
 });
 
 test('buildOutstandingEmbeds — truncates a show that overflows the 4096-char embed limit', () => {

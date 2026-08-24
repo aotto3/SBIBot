@@ -16,7 +16,8 @@ module.exports = {
 
     const today  = utils.todayCentral();
     const shifts = repo.getOutstandingShifts(today);
-    const embeds = buildOutstandingEmbeds(shifts, [], interaction.guildId);
+    const games  = repo.getOutstandingGames(today);
+    const embeds = buildOutstandingEmbeds(shifts, games, interaction.guildId);
 
     if (!embeds.length) {
       return interaction.editReply('✅ No outstanding requests.');
