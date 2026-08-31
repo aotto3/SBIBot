@@ -381,6 +381,24 @@ test('runCustomGameReminders — game exists: sendMessage called once', async ()
   assert.ok(sent[0].includes('Great Gold Bird'), 'message should include the show label');
 });
 
+test('runCustomGameReminders — includes link to the original post when message_id is set', async () => {
+  cleanDb();
+  insertOldCustomGame({ channelId: 'channel-test-1', show: 'GGB', requesterId: 'req-1', messageId: 'game-msg-1' });
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    sendMessage: async (_ch, content) => sent.push(content),
+  });
+
+  await runCustomGameReminders(discord);
+
+  assert.equal(sent.length, 1, 'one game → sendMessage should be called once');
+  assert.ok(
+    sent[0].includes('https://discord.com/channels/guild-test-1/channel-test-1/game-msg-1'),
+    'reminder should link to the original custom game post',
+  );
+});
+
 test('runCustomGameReminders — fetchChannel throws: does not crash, skips game', async () => {
   cleanDb();
   insertOldCustomGame();
