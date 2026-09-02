@@ -102,6 +102,14 @@ function insertMonthlyMeeting() {
   });
 }
 
+function insertWeeklyMeeting() {
+  return db.createMeeting({
+    title: 'Weekly Standup', time: '19:00', duration: 60, date: null,
+    recurrence_type: 'weekly', recurrence_day: 'tuesday', recurrence_week: null,
+    channel_id: 'C1', target_type: 'here', reminder_7d: 1, reminder_24h: 1,
+  });
+}
+
 test('postMeetingReminder — monthly 7d is posted as an RSVP post (reactions added, recorded)', async () => {
   const id = insertMonthlyMeeting();
   const meeting = db.getMeeting(id);
@@ -136,6 +144,61 @@ test('postMeetingReminder — monthly 24h is its own RSVP post, links to 7d, sho
   assert.ok(h24.content.includes(`/${sevenDayId}`), '24h links to the 7d post');
   assert.ok(h24.content.includes('Attending (1)') && h24.content.includes('Alice'),
     '24h shows the shared RSVP state on post');
+});
+
+test('postMeetingReminder — weekly 7d is posted as an RSVP post (reactions added, recorded)', async () => {
+  const id = insertWeeklyMeeting();
+  const meeting = db.getMeeting(id);
+  const client = makeFakeClient();
+
+  await postMeetingReminder(client, meeting, '2026-05-05', '7d');
+
+  assert.equal(client._sent.length, 1);
+  assert.ok(client._sent[0].content.includes('React to RSVP'), 'weekly 7d carries the RSVP prompt');
+  assert.deepEqual(client._sent[0].reactions, ['✅', '❌', '❓'], 'weekly 7d gets the three RSVP reactions');
+  const rec = db.getReminderRecord(id, '2026-05-05', '7d');
+  assert.equal(rec.message_id, client._sent[0].id, 'weekly 7d post recorded with its message id');
+});
+
+test('postMeetingReminder — weekly 24h is its own RSVP post, links to 7d, shows shared RSVPs', async () => {
+  const id = insertWeeklyMeeting();
+  const meeting = db.getMeeting(id);
+  const client = makeFakeClient();
+
+  // Post the 7d first (records its message id). For a weekly meeting the 7d
+  // reminder for this occurrence was posted a week earlier under the same
+  // instance_date — the followup path used to look this up under 'created' and
+  // find nothing, producing a dead, reaction-less post.
+  await postMeetingReminder(client, meeting, '2026-05-05', '7d');
+  const sevenDayId = client._sent[0].id;
+
+  // Simulate an RSVP already made on the 7d post during the week.
+  db.setMeetingRsvp(id, '2026-05-05', 'U1', 'yes', '7d', Date.now(), 'Alice');
+
+  await postMeetingReminder(client, meeting, '2026-05-05', '24h');
+
+  const h24 = client._sent[1];
+  assert.ok(h24.content.includes('React to RSVP'), 'weekly 24h carries its own RSVP prompt');
+  assert.deepEqual(h24.reactions, ['✅', '❌', '❓'], 'weekly 24h gets its own reactions');
+  assert.ok(h24.content.includes(`/${sevenDayId}`), 'weekly 24h links to the 7d post');
+  assert.ok(h24.content.includes('Attending (1)') && h24.content.includes('Alice'),
+    'weekly 24h shows the shared RSVP state on post');
+});
+
+test('postMeetingReminder — weekly 24h with 7d disabled is still an RSVP post (no cross-link)', async () => {
+  const id = db.createMeeting({
+    title: 'Weekly Standup', time: '19:00', duration: 60, date: null,
+    recurrence_type: 'weekly', recurrence_day: 'tuesday', recurrence_week: null,
+    channel_id: 'C1', target_type: 'here', reminder_7d: 0, reminder_24h: 1,
+  });
+  const meeting = db.getMeeting(id);
+  const client = makeFakeClient();
+
+  await postMeetingReminder(client, meeting, '2026-05-12', '24h');
+
+  assert.equal(client._sent.length, 1);
+  assert.ok(client._sent[0].content.includes('React to RSVP'), 'weekly 24h prompts for RSVP even without a 7d post');
+  assert.deepEqual(client._sent[0].reactions, ['✅', '❌', '❓'], 'weekly 24h gets reactions on its own');
 });
 
 test('postMeetingReminder — one-time 7d is unchanged (follow-up, no reactions)', async () => {
