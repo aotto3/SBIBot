@@ -31,8 +31,10 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - bookeo-asst: ignores `to` param, returns full week. Filter client-side: `shifts.filter(s => s.date >= from && s.date <= to)`
 
 ## Meeting reminders
-- `'created'`: immediate, RSVP reactions (✅❌❓) + live tracker
-- `'7d'`/`'24h'`: no reactions added; @mentions ✅/❓ reactors from created post; links back to it
+- Post kind is decided by `isRecurring = !!meeting.recurrence_type` (weekly OR monthly) in both `postMeetingReminder` and `editMeetingPosts` — the two must stay in sync
+- **One-time meetings:** `'created'` is the RSVP post (reactions ✅❌❓ + live single-message tracker); `'7d'`/`'24h'` are follow-ups (no reactions) that @mention ✅/❓ reactors from the created post and link back to it (same occurrence → `getCreatedReminderRecord` resolves)
+- **Recurring meetings (weekly + monthly):** `'created'` is a plain reaction-less announcement; the `'7d'` and `'24h'` posts are the RSVP posts — each gets its own ✅❌❓ reactions and they SHARE one per-occurrence RSVP (mirror/sync). The 24h post links to the 7d and renders existing RSVPs on post. Do NOT route recurring 7d/24h through the follow-up path: it keys off the single `'created'` post, whose `instance_date` only matches the first occurrence, so every later occurrence would get a dead, reaction-less post (this was the weekly 24h bug)
+- Reaction handling: `rsvp.js` `handleMeetingReaction` → `isRecurringOccurrence` (any `recurrence_type` + 7d/24h) uses the shared-RSVP path (`meeting_rsvps` + `resolveReaction` + `renderOccurrenceTrackers`); everything else falls back to `updateMeetingTracker` (single-message)
 - DB: `meeting_reminders_sent(meeting_id, instance_date, reminder_type, message_id)` — all 3 types stored
 - `TRACKER_MARKER = '\n\n​'` — zero-width space; splits header from live tracker in all post types
 - `lib/meetings.js` exports: `buildMeetingReminderContent`, `buildFollowupReminderContent`, `buildCancelledPostContent`, `fetchAttendeeIds`, `db.getCreatedReminderRecord`

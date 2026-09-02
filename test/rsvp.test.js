@@ -170,10 +170,11 @@ test('ping redirect — DM failure is non-blocking: reaction removed and message
  * objects: the two post messages, a channel that fetches them, and a reactedFrom
  * spy of stale-reaction removals.
  */
-function makeMonthlySetup() {
+function makeMonthlySetup(recurrence = { recurrence_type: 'monthly_weekday', recurrence_week: 'first' }) {
   const meetingId = db.createMeeting({
     title: 'Board', time: '19:00', duration: 60, date: null,
-    recurrence_type: 'monthly_weekday', recurrence_day: 'tuesday', recurrence_week: 'first',
+    recurrence_type: recurrence.recurrence_type, recurrence_day: 'tuesday',
+    recurrence_week: recurrence.recurrence_week ?? null,
     channel_id: 'C1', target_type: 'here', reminder_7d: 1, reminder_24h: 1,
   });
   db.markReminderSent(meetingId, '2026-05-05', '7d',  'M7');
@@ -255,6 +256,38 @@ test('monthly RSVP — removing the current reaction clears the RSVP', async () 
 
   assert.equal(db.getMeetingRsvp(meetingId, '2026-05-05', 'U1'), null, 'RSVP cleared');
   assert.ok(m7.content.includes('Attending (0):** _none yet_'), 'tracker shows none');
+});
+
+test('weekly RSVP — reacting ✅ on the 7d post records shared state and syncs both posts', async () => {
+  cleanDb();
+  const { meetingId, m7, m24 } = makeMonthlySetup({ recurrence_type: 'weekly' });
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+
+  await reactOn(m7, '✅', user, 'add');
+
+  const row = db.getMeetingRsvp(meetingId, '2026-05-05', 'U1');
+  assert.equal(row.status, 'yes', 'weekly meeting stores shared RSVP state');
+  assert.equal(row.post,   '7d');
+  assert.ok(m7.content.includes('Attending (1)')  && m7.content.includes('Alice'), 'weekly 7d tracker rendered');
+  assert.ok(m24.content.includes('Attending (1)') && m24.content.includes('Alice'), 'weekly 24h tracker kept in sync');
+});
+
+test('weekly RSVP — changing to ❌ on the 24h post flips status and cleans the stale ✅ off the 7d post', async () => {
+  cleanDb();
+  const { meetingId, m7, m24, removedFrom, physicalReaction } = makeMonthlySetup({ recurrence_type: 'weekly' });
+  const user = { id: 'U1', bot: false, username: 'Alice' };
+
+  physicalReaction(m7, '✅', 'U1');
+  await reactOn(m7,  '✅', user, 'add');
+  await reactOn(m24, '❌', user, 'add');
+
+  const row = db.getMeetingRsvp(meetingId, '2026-05-05', 'U1');
+  assert.equal(row.status, 'no');
+  assert.equal(row.post,   '24h');
+  assert.ok(removedFrom.some(r => r.messageId === 'M7' && r.emoji === '✅' && r.userId === 'U1'),
+    'stale ✅ removed from the weekly 7d post (mirror cleanup)');
+  assert.ok(m7.content.includes('Not attending (1)') && m24.content.includes('Not attending (1)'),
+    'both weekly posts show No');
 });
 
 test('monthly RSVP — a non-monthly meeting post still uses the single-message tracker', async () => {
