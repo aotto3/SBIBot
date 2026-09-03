@@ -571,6 +571,75 @@ test('runCustomGameReminders — fetches guild members once per run regardless o
   assert.equal(memberFetches, 1, 'guild members should be fetched once per run, not once per game');
 });
 
+test('runCustomGameReminders — returns a partial-failure summary when a reminder send fails (#136)', async () => {
+  cleanDb();
+
+  const g1 = insertOldCustomGame({ show: 'GGB', messageId: 'game-pf-1', channelId: 'channel-test-1', time: '19:00' });
+  const g2 = insertOldCustomGame({ show: 'GGB', messageId: 'game-pf-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-cgpf', {
+    id: 'role-mikey-cgpf',
+    name: 'Mikey',
+    members: new Map([['silent-cgpf', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let sends = 0;
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async () => {
+      sends++;
+      if (sends === 1) throw new Error('Request with opcode 8 was rate limited');
+      return { id: 'x' };
+    },
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCustomGameReminders(discord);
+
+  assert.equal(summary.planned, 2, 'two reminders planned');
+  assert.equal(summary.sent, 1, 'one reminder succeeded');
+  assert.equal(summary.failed.length, 1, 'one reminder was dropped');
+  assert.equal(summary.failed[0].id, g1, 'the dropped item is the first game');
+  assert.match(summary.failed[0].reason, /opcode 8/, 'the drop reason is captured');
+  assert.ok(g2, 'sanity: second game inserted');
+});
+
+test('runShiftDMs — returns a partial-failure summary when a shift DM send fails (#136)', async () => {
+  cleanDb();
+  linkMember('Alice Otto', 'user-alice');
+  linkMember('Bob Otto',   'user-bob');
+
+  const bookeoAdapter = makeTestBookeoAdapter({
+    getSchedule: async () => [
+      makeShift({ cast: ['Alice Otto'], time: '7:00 PM' }),
+      makeShift({ cast: ['Bob Otto'],   time: '9:00 PM' }),
+    ],
+  });
+
+  let dms = 0;
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (_userId) => {
+      dms++;
+      if (dms === 1) throw new Error('Cannot send messages to this user (DMs closed)');
+    },
+  });
+
+  const summary = await runShiftDMs(discord, bookeoAdapter, 'weekly');
+
+  assert.equal(summary.planned, 2, 'two linked cast to DM');
+  assert.equal(summary.sent, 1, 'one DM succeeded');
+  assert.equal(summary.failed.length, 1, 'one DM failed');
+  assert.equal(summary.failed[0].id, 'user-alice', 'the failed DM is the first recipient');
+  assert.match(summary.failed[0].reason, /DMs closed/, 'the failure reason is captured');
+});
+
 test('runCoverageRolePings — a transient guild-member fetch failure is retried, ping still delivered', async () => {
   // Proves the job wires in fetchGuildMembersWithRetry: one flaky fetch must not
   // wipe out the reminder.
@@ -610,6 +679,45 @@ test('runCoverageRolePings — a transient guild-member fetch failure is retried
   assert.equal(fetches, 2, 'the member fetch should be retried after the transient failure');
   assert.equal(sent.length, 1, 'the ping should still be delivered after the retry');
   assert.ok(sent[0].includes(`<@${SILENT_ID}>`), 'the silent cast member should be pinged');
+});
+
+test('runCoverageRolePings — returns a partial-failure summary when a ping send fails (#136)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-pf', show: 'GGB', messageId: 'msg-pf-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: 'req-pf', show: 'GGB', messageId: 'msg-pf-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-pf', {
+    id: 'role-mikey-pf',
+    name: 'Mikey',
+    members: new Map([['silent-pf', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let sends = 0;
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, _content) => {
+      sends++;
+      if (sends === 1) throw new Error('Request with opcode 8 was rate limited');
+      return { id: 'ping-ok' };
+    },
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo);
+
+  assert.equal(summary.planned, 2, 'two pings planned');
+  assert.equal(summary.sent, 1, 'one ping succeeded');
+  assert.equal(summary.failed.length, 1, 'one ping was dropped');
+  assert.equal(summary.failed[0].id, 'msg-pf-1', 'the dropped item is the first (rate-limited) ping');
+  assert.match(summary.failed[0].reason, /opcode 8/, 'the drop reason is captured');
 });
 
 test('runCoverageRolePings — requester is only silent member: falls back to role ping', async () => {
@@ -1057,6 +1165,37 @@ test('runLatebookingCheck — newly-booked show sends DM to linked cast member',
   assert.ok(dms[0].content.includes('Last-minute booking'), 'DM includes last-minute alert label');
   assert.ok(dms[0].content.includes('Great Gold Bird'),    'DM includes show label');
   assert.ok(dms[0].content.includes('5 guests'),           'DM includes guest count');
+});
+
+test('runLatebookingCheck — returns a summary and notifies when a cast DM fails (#136)', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-a', 'Cast A', 'Cast A');
+  db.linkMember('discord-b', 'Cast B', 'Cast B');
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Cast A', 'Cast B'] }]);
+
+  let dms = 0;
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId) => {
+      dms++;
+      if (userId === 'discord-a') throw new Error('Cannot send messages to this user (DMs closed)');
+    },
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Cast A', 'Cast B'], guest_count: 3 }],
+  });
+
+  const notices = [];
+  const notify = async (outcome) => { notices.push(outcome); };
+
+  const summary = await runLatebookingCheck(discord, bookeo, TODAY, notify);
+
+  assert.equal(summary.planned, 2, 'two cast members to DM');
+  assert.equal(summary.sent, 1, 'one DM succeeded');
+  assert.equal(summary.failed.length, 1, 'one DM failed');
+  assert.equal(summary.failed[0].id, 'Cast A', 'the failed DM names the cast member');
+  assert.equal(notices.length, 1, 'notify is called for the partial failure');
+  assert.equal(notices[0].failed.length, 1);
 });
 
 test('runLatebookingCheck — already-notified row is not re-sent', async () => {

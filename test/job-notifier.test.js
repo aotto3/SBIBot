@@ -24,6 +24,24 @@ test('buildJobOutcomeNotice — hard failure names the job and the error reason'
   assert.match(msg, /fail/i, 'notice should read as a failure');
 });
 
+test('buildJobOutcomeNotice — partial failure lists the counts and affected item ids', () => {
+  const msg = buildJobOutcomeNotice({
+    label:   'Coverage role pings',
+    planned: 11,
+    sent:    1,
+    failed: [
+      { id: 'msg-232', type: 'coverage-ping', reason: 'Request with opcode 8 was rate limited' },
+      { id: 'msg-99',  type: 'coverage-ping', reason: 'Request with opcode 8 was rate limited' },
+    ],
+  });
+
+  assert.match(msg, /Coverage role pings/, 'names the job');
+  assert.match(msg, /1\s*\/\s*11|sent 1|1 of 11/, 'shows sent/planned counts');
+  assert.match(msg, /2/, 'shows the dropped count');
+  assert.match(msg, /msg-232/, 'lists an affected item id');
+  assert.match(msg, /msg-99/, 'lists all affected item ids');
+});
+
 // ─── runJob ───────────────────────────────────────────────────────────────────
 
 test('runJob — a thrown job triggers notify with the label + error and does not rethrow', async () => {
@@ -47,6 +65,29 @@ test('runJob — a successful job does not notify and returns its result', async
 
   assert.equal(calls.length, 0, 'notify should not be called on success');
   assert.equal(result, 'done', 'the job result should be returned');
+});
+
+test('runJob — a job that returns dropped items notifies with a partial-failure outcome', async () => {
+  const calls = [];
+  const notify = async (outcome) => { calls.push(outcome); };
+  const summary = { planned: 3, sent: 1, failed: [{ id: 'x', type: 'coverage-ping', reason: 'r' }] };
+
+  const result = await runJob('Coverage role pings', async () => summary, notify);
+
+  assert.equal(calls.length, 1, 'notify called once for the partial failure');
+  assert.equal(calls[0].label, 'Coverage role pings');
+  assert.equal(calls[0].failed.length, 1);
+  assert.equal(calls[0].sent, 1);
+  assert.equal(result, summary, 'the summary is still returned to the caller');
+});
+
+test('runJob — a job that returns a clean summary (no drops) does not notify', async () => {
+  const calls = [];
+  const notify = async (outcome) => { calls.push(outcome); };
+
+  await runJob('X', async () => ({ planned: 3, sent: 3, failed: [] }), notify);
+
+  assert.equal(calls.length, 0, 'a clean summary must not notify');
 });
 
 // ─── notifyJobOutcome (dispatcher) ────────────────────────────────────────────
