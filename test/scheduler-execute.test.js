@@ -14,6 +14,7 @@ process.env.DB_PATH = ':memory:';
 
 const db      = require('../lib/db');
 const repo    = require('../lib/coverage-repository');
+const cfg     = require('../lib/config');
 const utils   = require('../lib/utils');
 const {
   runMeetingReminderCheck, runShiftDMs,
@@ -1182,6 +1183,18 @@ test('buildJobRegistry — exposes every scheduled job with a label and a run fu
     assert.ok(registry[key].label.length > 0, `${key}.label is non-empty`);
     assert.equal(typeof registry[key].run, 'function', `${key}.run is a function`);
   }
+});
+
+// ─── ops-contact config (#135) ────────────────────────────────────────────────
+
+test('getOpsContactId — defaults to the owner id when unset, returns the configured value when set', () => {
+  cleanDb();
+  const { DEFAULT_OPS_CONTACT_ID } = require('../lib/job-notifier');
+
+  assert.equal(cfg.getOpsContactId(), DEFAULT_OPS_CONTACT_ID, 'defaults to owner when unset');
+
+  cfg.setOpsContactId('user-ops-1');
+  assert.equal(cfg.getOpsContactId(), 'user-ops-1', 'returns the configured value once set');
 });
 
 // ─── deleteMeeting (#133) ─────────────────────────────────────────────────────
