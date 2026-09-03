@@ -18,6 +18,7 @@ const utils   = require('../lib/utils');
 const {
   runMeetingReminderCheck, runShiftDMs,
   runCustomGameReminders, runLatebookingCheck,
+  buildJobRegistry,
 } = require('../lib/scheduler');
 const { runCoverageRolePings, runEodCoverageReminder, runMaybeNudge } = require('../lib/coverage-jobs');
 const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
@@ -1163,6 +1164,24 @@ test('seedLatebookingBaseline — re-seeding same date does not duplicate rows',
   db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }]); // second call
   const rows = db.getUnnotifiedLatebookingRows(TODAY);
   assert.equal(rows.length, 1, 'rows must not be duplicated on re-seed');
+});
+
+// ─── buildJobRegistry (#134) ──────────────────────────────────────────────────
+
+test('buildJobRegistry — exposes every scheduled job with a label and a run function', () => {
+  const registry = buildJobRegistry({ discord: {}, repo: {}, bkAdapter: {}, client: {} });
+
+  const expectedKeys = [
+    'meeting-reminders', 'coverage-pings', 'custom-game-reminders', 'eod-reminder',
+    'maybe-nudge', 'shift-dms', 'latebooking', 'checkin-seed',
+  ];
+
+  for (const key of expectedKeys) {
+    assert.ok(registry[key], `registry should contain "${key}"`);
+    assert.equal(typeof registry[key].label, 'string', `${key}.label is a string`);
+    assert.ok(registry[key].label.length > 0, `${key}.label is non-empty`);
+    assert.equal(typeof registry[key].run, 'function', `${key}.run is a function`);
+  }
 });
 
 // ─── deleteMeeting (#133) ─────────────────────────────────────────────────────
