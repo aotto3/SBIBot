@@ -491,6 +491,125 @@ test('runCoverageRolePings — coverage requester not mentioned even when silent
   assert.ok(sent[0].includes(`<@${OTHER_ID}>`),     'other cast member must be pinged');
 });
 
+test('runCoverageRolePings — fetches guild members once per run regardless of ping count (opcode-8 rate-limit regression)', async () => {
+  // Regression for #132: the roster fetch (gateway opcode 8) must happen once per
+  // run, not once per reminder. Three planned pings previously meant three fetches,
+  // which tripped Discord's rate limit and dropped all but the first reminder.
+  cleanDb();
+
+  const REQUESTER_ID = 'user-requester-fetchonce';
+  const SILENT_ID    = 'user-silent-fetchonce';
+
+  // Three open GGB shifts, each with its own message → three planned pings.
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-2', channelId: 'channel-test-1', time: '20:00' });
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-3', channelId: 'channel-test-1', time: '21:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-fo', {
+    id: 'role-mikey-fo',
+    name: 'Mikey',
+    members: new Map([[REQUESTER_ID, {}], [SILENT_ID, {}]]),
+  });
+
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let memberFetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => { memberFetches++; },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord, repo);
+
+  assert.equal(sent.length, 3, 'all three shifts should be pinged (no rate-limit drops)');
+  assert.equal(memberFetches, 1, 'guild members should be fetched once per run, not once per ping');
+});
+
+test('runCustomGameReminders — fetches guild members once per run regardless of game count (opcode-8 rate-limit regression)', async () => {
+  // Same regression as above, second batch sender: the custom-game reminder job
+  // runs in the same 8am window and must not flood opcode 8 either.
+  cleanDb();
+
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-1', channelId: 'channel-test-1', time: '19:00' });
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-2', channelId: 'channel-test-1', time: '20:00' });
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-3', channelId: 'channel-test-1', time: '21:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-cg', {
+    id: 'role-mikey-cg',
+    name: 'Mikey',
+    members: new Map([['user-silent-cg', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let memberFetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => { memberFetches++; },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCustomGameReminders(discord);
+
+  assert.equal(sent.length, 3, 'all three games should be reminded (no rate-limit drops)');
+  assert.equal(memberFetches, 1, 'guild members should be fetched once per run, not once per game');
+});
+
+test('runCoverageRolePings — a transient guild-member fetch failure is retried, ping still delivered', async () => {
+  // Proves the job wires in fetchGuildMembersWithRetry: one flaky fetch must not
+  // wipe out the reminder.
+  cleanDb();
+
+  const REQUESTER_ID = 'user-req-retry';
+  const SILENT_ID    = 'user-silent-retry';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-retry-1', channelId: 'channel-test-1' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-retry', {
+    id: 'role-mikey-retry',
+    name: 'Mikey',
+    members: new Map([[REQUESTER_ID, {}], [SILENT_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let fetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {
+      fetches++;
+      if (fetches < 2) throw new Error('Request with opcode 8 was rate limited');
+    },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord, repo);
+
+  assert.equal(fetches, 2, 'the member fetch should be retried after the transient failure');
+  assert.equal(sent.length, 1, 'the ping should still be delivered after the retry');
+  assert.ok(sent[0].includes(`<@${SILENT_ID}>`), 'the silent cast member should be pinged');
+});
+
 test('runCoverageRolePings — requester is only silent member: falls back to role ping', async () => {
   // When the requester is the only member who hasn't responded, excluding them leaves
   // nonResponders empty → the bot should fall back to a @role mention rather than pinging nobody.
