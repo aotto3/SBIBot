@@ -14,10 +14,12 @@ process.env.DB_PATH = ':memory:';
 
 const db      = require('../lib/db');
 const repo    = require('../lib/coverage-repository');
+const cfg     = require('../lib/config');
 const utils   = require('../lib/utils');
 const {
   runMeetingReminderCheck, runShiftDMs,
   runCustomGameReminders, runLatebookingCheck,
+  buildJobRegistry,
 } = require('../lib/scheduler');
 const { runCoverageRolePings, runEodCoverageReminder, runMaybeNudge } = require('../lib/coverage-jobs');
 const { makeTestDiscordAdapter, makeTestBookeoAdapter, makeFakeGuild, makeFakeChannel } = require('./helpers/adapters');
@@ -491,6 +493,286 @@ test('runCoverageRolePings — coverage requester not mentioned even when silent
   assert.ok(sent[0].includes(`<@${OTHER_ID}>`),     'other cast member must be pinged');
 });
 
+test('runCoverageRolePings — fetches guild members once per run regardless of ping count (opcode-8 rate-limit regression)', async () => {
+  // Regression for #132: the roster fetch (gateway opcode 8) must happen once per
+  // run, not once per reminder. Three planned pings previously meant three fetches,
+  // which tripped Discord's rate limit and dropped all but the first reminder.
+  cleanDb();
+
+  const REQUESTER_ID = 'user-requester-fetchonce';
+  const SILENT_ID    = 'user-silent-fetchonce';
+
+  // Three open GGB shifts, each with its own message → three planned pings.
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-2', channelId: 'channel-test-1', time: '20:00' });
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-fo-3', channelId: 'channel-test-1', time: '21:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-fo', {
+    id: 'role-mikey-fo',
+    name: 'Mikey',
+    members: new Map([[REQUESTER_ID, {}], [SILENT_ID, {}]]),
+  });
+
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let memberFetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => { memberFetches++; },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord, repo);
+
+  assert.equal(sent.length, 3, 'all three shifts should be pinged (no rate-limit drops)');
+  assert.equal(memberFetches, 1, 'guild members should be fetched once per run, not once per ping');
+});
+
+test('runCustomGameReminders — fetches guild members once per run regardless of game count (opcode-8 rate-limit regression)', async () => {
+  // Same regression as above, second batch sender: the custom-game reminder job
+  // runs in the same 8am window and must not flood opcode 8 either.
+  cleanDb();
+
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-1', channelId: 'channel-test-1', time: '19:00' });
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-2', channelId: 'channel-test-1', time: '20:00' });
+  insertOldCustomGame({ show: 'GGB', messageId: 'game-fo-3', channelId: 'channel-test-1', time: '21:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-cg', {
+    id: 'role-mikey-cg',
+    name: 'Mikey',
+    members: new Map([['user-silent-cg', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let memberFetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => { memberFetches++; },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCustomGameReminders(discord);
+
+  assert.equal(sent.length, 3, 'all three games should be reminded (no rate-limit drops)');
+  assert.equal(memberFetches, 1, 'guild members should be fetched once per run, not once per game');
+});
+
+test('runCustomGameReminders — returns a partial-failure summary when a reminder send fails (#136)', async () => {
+  cleanDb();
+
+  const g1 = insertOldCustomGame({ show: 'GGB', messageId: 'game-pf-1', channelId: 'channel-test-1', time: '19:00' });
+  const g2 = insertOldCustomGame({ show: 'GGB', messageId: 'game-pf-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-cgpf', {
+    id: 'role-mikey-cgpf',
+    name: 'Mikey',
+    members: new Map([['silent-cgpf', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let sends = 0;
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async () => {
+      sends++;
+      if (sends === 1) throw new Error('Request with opcode 8 was rate limited');
+      return { id: 'x' };
+    },
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCustomGameReminders(discord);
+
+  assert.equal(summary.planned, 2, 'two reminders planned');
+  assert.equal(summary.sent, 1, 'one reminder succeeded');
+  assert.equal(summary.failed.length, 1, 'one reminder was dropped');
+  assert.equal(summary.failed[0].id, g1, 'the dropped item is the first game');
+  assert.match(summary.failed[0].reason, /opcode 8/, 'the drop reason is captured');
+  assert.ok(g2, 'sanity: second game inserted');
+});
+
+test('runShiftDMs — returns a partial-failure summary when a shift DM send fails (#136)', async () => {
+  cleanDb();
+  linkMember('Alice Otto', 'user-alice');
+  linkMember('Bob Otto',   'user-bob');
+
+  const bookeoAdapter = makeTestBookeoAdapter({
+    getSchedule: async () => [
+      makeShift({ cast: ['Alice Otto'], time: '7:00 PM' }),
+      makeShift({ cast: ['Bob Otto'],   time: '9:00 PM' }),
+    ],
+  });
+
+  let dms = 0;
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (_userId) => {
+      dms++;
+      if (dms === 1) throw new Error('Cannot send messages to this user (DMs closed)');
+    },
+  });
+
+  const summary = await runShiftDMs(discord, bookeoAdapter, 'weekly');
+
+  assert.equal(summary.planned, 2, 'two linked cast to DM');
+  assert.equal(summary.sent, 1, 'one DM succeeded');
+  assert.equal(summary.failed.length, 1, 'one DM failed');
+  assert.equal(summary.failed[0].id, 'user-alice', 'the failed DM is the first recipient');
+  assert.match(summary.failed[0].reason, /DMs closed/, 'the failure reason is captured');
+});
+
+test('runCoverageRolePings — a transient guild-member fetch failure is retried, ping still delivered', async () => {
+  // Proves the job wires in fetchGuildMembersWithRetry: one flaky fetch must not
+  // wipe out the reminder.
+  cleanDb();
+
+  const REQUESTER_ID = 'user-req-retry';
+  const SILENT_ID    = 'user-silent-retry';
+
+  insertCoverageShift({ requesterId: REQUESTER_ID, show: 'GGB', messageId: 'msg-retry-1', channelId: 'channel-test-1' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-retry', {
+    id: 'role-mikey-retry',
+    name: 'Mikey',
+    members: new Map([[REQUESTER_ID, {}], [SILENT_ID, {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let fetches = 0;
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {
+      fetches++;
+      if (fetches < 2) throw new Error('Request with opcode 8 was rate limited');
+    },
+    sendMessage:       async (_ch, content) => sent.push(content),
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  await runCoverageRolePings(discord, repo);
+
+  assert.equal(fetches, 2, 'the member fetch should be retried after the transient failure');
+  assert.equal(sent.length, 1, 'the ping should still be delivered after the retry');
+  assert.ok(sent[0].includes(`<@${SILENT_ID}>`), 'the silent cast member should be pinged');
+});
+
+test('runCoverageRolePings — returns a partial-failure summary when a ping send fails (#136)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-pf', show: 'GGB', messageId: 'msg-pf-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: 'req-pf', show: 'GGB', messageId: 'msg-pf-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-pf', {
+    id: 'role-mikey-pf',
+    name: 'Mikey',
+    members: new Map([['silent-pf', {}]]),
+  });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  let sends = 0;
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, _content) => {
+      sends++;
+      if (sends === 1) throw new Error('Request with opcode 8 was rate limited');
+      return { id: 'ping-ok' };
+    },
+    _fakeGuild:   guild,
+    _fakeChannel: channel,
+    _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo);
+
+  assert.equal(summary.planned, 2, 'two pings planned');
+  assert.equal(summary.sent, 1, 'one ping succeeded');
+  assert.equal(summary.failed.length, 1, 'one ping was dropped');
+  assert.equal(summary.failed[0].id, 'msg-pf-1', 'the dropped item is the first (rate-limited) ping');
+  assert.match(summary.failed[0].reason, /opcode 8/, 'the drop reason is captured');
+});
+
+test('runCoverageRolePings — smart mode skips posts already pinged today (#137)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-sm', show: 'GGB', messageId: 'msg-sm-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: 'req-sm', show: 'GGB', messageId: 'msg-sm-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-sm', { id: 'role-mikey-sm', name: 'Mikey', members: new Map([['silent-sm', {}]]) });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, content) => { sent.push(content); return { id: 'p' }; },
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo, { mode: 'smart', alreadyPingedMessageIds: ['msg-sm-1'] });
+
+  assert.equal(summary.planned, 1, 'only the un-pinged post is targeted');
+  assert.equal(sent.length, 1, 'only one ping sent');
+  assert.ok(sent[0].includes('msg-sm-2'), 'the ping is for the post not already pinged');
+});
+
+test('runCoverageRolePings — preview mode sends nothing and returns the targets (#137)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-pv', show: 'GGB', messageId: 'msg-pv-1', channelId: 'channel-test-1', time: '19:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-pv', { id: 'role-mikey-pv', name: 'Mikey', members: new Map([['silent-pv', {}]]) });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, content) => { sent.push(content); return { id: 'p' }; },
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo, { preview: true });
+
+  assert.equal(sent.length, 0, 'preview must not send any pings');
+  assert.equal(summary.preview.length, 1, 'preview lists the target post');
+  assert.equal(summary.preview[0].messageId, 'msg-pv-1');
+});
+
 test('runCoverageRolePings — requester is only silent member: falls back to role ping', async () => {
   // When the requester is the only member who hasn't responded, excluding them leaves
   // nonResponders empty → the bot should fall back to a @role mention rather than pinging nobody.
@@ -938,6 +1220,37 @@ test('runLatebookingCheck — newly-booked show sends DM to linked cast member',
   assert.ok(dms[0].content.includes('5 guests'),           'DM includes guest count');
 });
 
+test('runLatebookingCheck — returns a summary and notifies when a cast DM fails (#136)', async () => {
+  cleanDb();
+  const TODAY = utils.todayCentral();
+  db.linkMember('discord-a', 'Cast A', 'Cast A');
+  db.linkMember('discord-b', 'Cast B', 'Cast B');
+  db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Cast A', 'Cast B'] }]);
+
+  let dms = 0;
+  const discord = makeTestDiscordAdapter({
+    sendDM: async (userId) => {
+      dms++;
+      if (userId === 'discord-a') throw new Error('Cannot send messages to this user (DMs closed)');
+    },
+  });
+  const bookeo = makeTestBookeoAdapter({
+    getSchedule: async () => [{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Cast A', 'Cast B'], guest_count: 3 }],
+  });
+
+  const notices = [];
+  const notify = async (outcome) => { notices.push(outcome); };
+
+  const summary = await runLatebookingCheck(discord, bookeo, TODAY, notify);
+
+  assert.equal(summary.planned, 2, 'two cast members to DM');
+  assert.equal(summary.sent, 1, 'one DM succeeded');
+  assert.equal(summary.failed.length, 1, 'one DM failed');
+  assert.equal(summary.failed[0].id, 'Cast A', 'the failed DM names the cast member');
+  assert.equal(notices.length, 1, 'notify is called for the partial failure');
+  assert.equal(notices[0].failed.length, 1);
+});
+
 test('runLatebookingCheck — already-notified row is not re-sent', async () => {
   cleanDb();
   const TODAY = utils.todayCentral();
@@ -1044,4 +1357,70 @@ test('seedLatebookingBaseline — re-seeding same date does not duplicate rows',
   db.seedLatebookingBaseline([{ date: TODAY, show: 'GGB', time: '7:00 PM', cast: ['Alice Smith'] }]); // second call
   const rows = db.getUnnotifiedLatebookingRows(TODAY);
   assert.equal(rows.length, 1, 'rows must not be duplicated on re-seed');
+});
+
+// ─── buildJobRegistry (#134) ──────────────────────────────────────────────────
+
+test('buildJobRegistry — exposes every scheduled job with a label and a run function', () => {
+  const registry = buildJobRegistry({ discord: {}, repo: {}, bkAdapter: {}, client: {} });
+
+  const expectedKeys = [
+    'meeting-reminders', 'coverage-pings', 'custom-game-reminders', 'eod-reminder',
+    'maybe-nudge', 'shift-dms', 'latebooking', 'checkin-seed',
+  ];
+
+  for (const key of expectedKeys) {
+    assert.ok(registry[key], `registry should contain "${key}"`);
+    assert.equal(typeof registry[key].label, 'string', `${key}.label is a string`);
+    assert.ok(registry[key].label.length > 0, `${key}.label is non-empty`);
+    assert.equal(typeof registry[key].run, 'function', `${key}.run is a function`);
+  }
+});
+
+// ─── getCoveragePingedMessageIdsSince (#137) ──────────────────────────────────
+
+test('getCoveragePingedMessageIdsSince — returns distinct original message ids since the cutoff', () => {
+  cleanDb();
+  db.saveCoveragePingMessage('ping-1', 'orig-1', 'ch', 'GGB', '2026-09-30', '19:00');
+  db.saveCoveragePingMessage('ping-2', 'orig-1', 'ch', 'GGB', '2026-09-30', '19:00'); // same original, different ping
+  db.saveCoveragePingMessage('ping-3', 'orig-2', 'ch', 'GGB', '2026-10-01', '20:00');
+
+  const ids = db.getCoveragePingedMessageIdsSince(0);
+  assert.deepEqual([...ids].sort(), ['orig-1', 'orig-2'], 'distinct original ids');
+});
+
+// ─── ops-contact config (#135) ────────────────────────────────────────────────
+
+test('getOpsContactId — defaults to the owner id when unset, returns the configured value when set', () => {
+  cleanDb();
+  const { DEFAULT_OPS_CONTACT_ID } = require('../lib/job-notifier');
+
+  assert.equal(cfg.getOpsContactId(), DEFAULT_OPS_CONTACT_ID, 'defaults to owner when unset');
+
+  cfg.setOpsContactId('user-ops-1');
+  assert.equal(cfg.getOpsContactId(), 'user-ops-1', 'returns the configured value once set');
+});
+
+// ─── deleteMeeting (#133) ─────────────────────────────────────────────────────
+
+test('deleteMeeting — removes the meeting and its members + reminder records atomically', () => {
+  cleanDb();
+
+  const meetingId = insertMeeting(7);
+  db.addMeetingMember(meetingId, 'user-del-1');
+  db.addMeetingMember(meetingId, 'user-del-2');
+  db.markReminderSent(meetingId, '2026-09-10', '7d', 'msg-del-1');
+
+  // Preconditions: child rows exist
+  assert.equal(db.getMeetingMembers(meetingId).length, 2, 'setup: two member rows');
+  assert.ok(db.getReminderRecord(meetingId, '2026-09-10', '7d'), 'setup: reminder row present');
+
+  db.deleteMeeting(meetingId); // must not throw (previously used the nonexistent db.transaction)
+
+  const meetingCount  = db.db.prepare('SELECT COUNT(*) AS n FROM meetings WHERE id = ?').get(meetingId).n;
+  const reminderCount = db.db.prepare('SELECT COUNT(*) AS n FROM meeting_reminders_sent WHERE meeting_id = ?').get(meetingId).n;
+
+  assert.equal(meetingCount, 0, 'meeting row must be deleted');
+  assert.equal(db.getMeetingMembers(meetingId).length, 0, 'member rows must be deleted');
+  assert.equal(reminderCount, 0, 'reminder-sent rows must be deleted');
 });
