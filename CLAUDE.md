@@ -5,7 +5,7 @@ See RULES.md for operational rules with feedback tracking.
 ## Commands
 - Start: `node index.js` / `npm start`
 - Register commands: `node deploy-commands.js` / `npm run deploy-commands` — re-run on any add/rename/option change
-- Tests: `npm test` (runs all `test/*.test.js` — 18 files, 365 tests). Uses `--test-force-exit`: `checkin.js` schedules real (non-`unref`'d) `setTimeout` alerts, so without it the runner hangs after tests finish waiting on pending timers.
+- Tests: `npm test` (runs all `test/*.test.js` — 18 files, 365 tests). `checkin.js` alert/retry timers are `.unref()`'d (and the 20s seed-timeout is cleared), so the runner exits on its own — no `--test-force-exit` needed.
 
 ## Env vars
 DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID, BOOKEO_API_URL, BOOKEO_API_KEY
