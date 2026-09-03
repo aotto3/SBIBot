@@ -1164,3 +1164,27 @@ test('seedLatebookingBaseline — re-seeding same date does not duplicate rows',
   const rows = db.getUnnotifiedLatebookingRows(TODAY);
   assert.equal(rows.length, 1, 'rows must not be duplicated on re-seed');
 });
+
+// ─── deleteMeeting (#133) ─────────────────────────────────────────────────────
+
+test('deleteMeeting — removes the meeting and its members + reminder records atomically', () => {
+  cleanDb();
+
+  const meetingId = insertMeeting(7);
+  db.addMeetingMember(meetingId, 'user-del-1');
+  db.addMeetingMember(meetingId, 'user-del-2');
+  db.markReminderSent(meetingId, '2026-09-10', '7d', 'msg-del-1');
+
+  // Preconditions: child rows exist
+  assert.equal(db.getMeetingMembers(meetingId).length, 2, 'setup: two member rows');
+  assert.ok(db.getReminderRecord(meetingId, '2026-09-10', '7d'), 'setup: reminder row present');
+
+  db.deleteMeeting(meetingId); // must not throw (previously used the nonexistent db.transaction)
+
+  const meetingCount  = db.db.prepare('SELECT COUNT(*) AS n FROM meetings WHERE id = ?').get(meetingId).n;
+  const reminderCount = db.db.prepare('SELECT COUNT(*) AS n FROM meeting_reminders_sent WHERE meeting_id = ?').get(meetingId).n;
+
+  assert.equal(meetingCount, 0, 'meeting row must be deleted');
+  assert.equal(db.getMeetingMembers(meetingId).length, 0, 'member rows must be deleted');
+  assert.equal(reminderCount, 0, 'reminder-sent rows must be deleted');
+});
