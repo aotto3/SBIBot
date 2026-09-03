@@ -720,6 +720,59 @@ test('runCoverageRolePings — returns a partial-failure summary when a ping sen
   assert.match(summary.failed[0].reason, /opcode 8/, 'the drop reason is captured');
 });
 
+test('runCoverageRolePings — smart mode skips posts already pinged today (#137)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-sm', show: 'GGB', messageId: 'msg-sm-1', channelId: 'channel-test-1', time: '19:00' });
+  insertCoverageShift({ requesterId: 'req-sm', show: 'GGB', messageId: 'msg-sm-2', channelId: 'channel-test-1', time: '20:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-sm', { id: 'role-mikey-sm', name: 'Mikey', members: new Map([['silent-sm', {}]]) });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, content) => { sent.push(content); return { id: 'p' }; },
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo, { mode: 'smart', alreadyPingedMessageIds: ['msg-sm-1'] });
+
+  assert.equal(summary.planned, 1, 'only the un-pinged post is targeted');
+  assert.equal(sent.length, 1, 'only one ping sent');
+  assert.ok(sent[0].includes('msg-sm-2'), 'the ping is for the post not already pinged');
+});
+
+test('runCoverageRolePings — preview mode sends nothing and returns the targets (#137)', async () => {
+  cleanDb();
+
+  insertCoverageShift({ requesterId: 'req-pv', show: 'GGB', messageId: 'msg-pv-1', channelId: 'channel-test-1', time: '19:00' });
+
+  const guild = makeFakeGuild();
+  guild.roles.cache.set('role-mikey-pv', { id: 'role-mikey-pv', name: 'Mikey', members: new Map([['silent-pv', {}]]) });
+  const channel = makeFakeChannel(guild, { id: 'channel-test-1' });
+
+  const sent = [];
+  const discord = makeTestDiscordAdapter({
+    fetchChannel:      async () => channel,
+    fetchMessage:      async () => channel._fakeMessage,
+    fetchGuildRoles:   async () => {},
+    fetchGuildMembers: async () => {},
+    sendMessage:       async (_ch, content) => { sent.push(content); return { id: 'p' }; },
+    _fakeGuild: guild, _fakeChannel: channel, _fakeMessage: channel._fakeMessage,
+  });
+
+  const summary = await runCoverageRolePings(discord, repo, { preview: true });
+
+  assert.equal(sent.length, 0, 'preview must not send any pings');
+  assert.equal(summary.preview.length, 1, 'preview lists the target post');
+  assert.equal(summary.preview[0].messageId, 'msg-pv-1');
+});
+
 test('runCoverageRolePings — requester is only silent member: falls back to role ping', async () => {
   // When the requester is the only member who hasn't responded, excluding them leaves
   // nonResponders empty → the bot should fall back to a @role mention rather than pinging nobody.
@@ -1322,6 +1375,18 @@ test('buildJobRegistry — exposes every scheduled job with a label and a run fu
     assert.ok(registry[key].label.length > 0, `${key}.label is non-empty`);
     assert.equal(typeof registry[key].run, 'function', `${key}.run is a function`);
   }
+});
+
+// ─── getCoveragePingedMessageIdsSince (#137) ──────────────────────────────────
+
+test('getCoveragePingedMessageIdsSince — returns distinct original message ids since the cutoff', () => {
+  cleanDb();
+  db.saveCoveragePingMessage('ping-1', 'orig-1', 'ch', 'GGB', '2026-09-30', '19:00');
+  db.saveCoveragePingMessage('ping-2', 'orig-1', 'ch', 'GGB', '2026-09-30', '19:00'); // same original, different ping
+  db.saveCoveragePingMessage('ping-3', 'orig-2', 'ch', 'GGB', '2026-10-01', '20:00');
+
+  const ids = db.getCoveragePingedMessageIdsSince(0);
+  assert.deepEqual([...ids].sort(), ['orig-1', 'orig-2'], 'distinct original ids');
 });
 
 // ─── ops-contact config (#135) ────────────────────────────────────────────────
