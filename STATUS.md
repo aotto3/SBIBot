@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-08-24
+**Last updated:** 2026-09-03
 
 ---
 
@@ -80,8 +80,8 @@ All meeting and custom game posts update in real time as people react. Shows fir
 - `/schedule` — view full week schedule from Bookeo
 - `/member-schedule` — view one person's schedule (by name or @mention)
 - `/send-shift-reminders` — manually trigger shift DMs, or preview what would be sent to one person (`user` + `preview:true`) without actually sending
-- Weekly shift DMs every Monday 9am CT (toggleable)
-- Daily 24h shift DMs every day 9am CT (toggleable)
+- Weekly shift DMs every Monday 8:48am CT (toggleable)
+- Daily 24h shift DMs every day 8:48am CT (toggleable)
 - `/bot-config` — toggle weekly/daily shift DMs on/off
 - Bookeo API responses are cached for 5 minutes
 - **Known bookeo-asst quirk:** the `/api/schedule` endpoint ignores the `to` param and always returns ~7 days. We filter results client-side after every call. Raised with J Cameron Cooper for a proper fix.
@@ -150,7 +150,7 @@ When a show has no audience bookings at 8:48am, the bot watches for last-minute 
 > Reply here if you have any issues!
 
 ### Check-in system
-Cast members on eligible shows receive a green "Check in: [Show Name]" button in their daily 9am shift DM. They can also run `/check-in` directly at any time on the day of a show.
+Cast members on eligible shows receive a green "Check in: [Show Name]" button in their daily 8:48am shift DM. They can also run `/check-in` directly at any time on the day of a show.
 
 **Eligible shows and roles:**
 - Great Gold Bird — Mikey (call time: 30 min before show)
@@ -166,7 +166,7 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 
 **Startup recovery:** on `ClientReady`, after seeding today's records, the bot also reschedules alerts for any pre-existing pending records (handles Railway redeploys). Grace window: if call time passed within 5 minutes of restart, the alert fires immediately; beyond 5 minutes, it is skipped with a console log.
 
-**Admin commands:** `/force-checkin`, `/set-checkin-channel`, `/add-checkin-contact`, `/remove-checkin-contact`, `/list-checkin-contacts`, `/dev-checkin-test` (seed/clear)
+**Admin commands:** `/force-checkin`, `/checkin-status`, `/add-checkin-contact`, `/remove-checkin-contact`, `/list-checkin-contacts`, `/dev-checkin-test` (seed/clear). The no-show **alert channel** for each show is set with `/set-channel-override` (type: *Check-in Alerts*), not a dedicated command.
 
 ### Coverage architecture (internal)
 - `lib/coverage-repository.js` — wraps all coverage DB calls behind a clean named interface; used by `rsvp.js` and `coverage-jobs.js` instead of calling `db` directly
@@ -174,8 +174,15 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 - `lib/coverage-session.js` — multi-role confirmation state is DB-backed (`coverage_confirmation_sessions` table) so partial selections survive bot restarts; sessions expire after 30 minutes (checked at read time + startup cleanup)
 - `/list-outstanding-requests` (admin, ephemeral) — read-only list of outstanding coverage shifts + custom games (open, not filled/confirmed/cancelled, date-not-passed), grouped per show, optional `show` filter, 🔴/🟡 status, jump link per row. Pure `coverage.buildOutstandingEmbeds` / `buildOutstandingEmptyState`; date-filtered `db.getOutstandingCoverageShifts` / `db.getOutstandingCustomGames` (separate from the 8am-ping queries). PRD #124, slices #125–#127.
 
+### Job failure notifications & recovery (issue #131)
+Every scheduled cron job runs through a shared `runJob` wrapper (`lib/job-notifier.js`) that catches thrown errors **and** inspects each batch job's `{ planned, sent, failed[] }` summary. On a hard failure or a partial drop ("sent 1 of 11"), it sends one notice per run — a **DM to the ops contact** and a post to the **error channel**.
+- Root cause fixed: the 8am coverage/game role-ping jobs fetched the full guild member roster (gateway opcode 8) once *per reminder*, tripping Discord's rate limit and dropping all but the first ping. The roster is now fetched **once per run** with bounded retry.
+- `lib/scheduler.js` `buildJobRegistry` maps each job → `{ label, run }` and is the single source shared by the cron wiring, the notifier, and `/rerun-job`.
+- `/set-ops-contact` sets the DM recipient (defaults to owner); `/rerun-job` re-runs any job on demand (coverage pings support `all` / `smart` / `preview`).
+- Also fixed `deleteMeeting` to use a `node:sqlite` transaction (was crashing the daily 8am meeting cleanup every morning).
+
 ### Misc
-- `/help` — ephemeral command list, available to all members
+- `/help` — member command list (public); `/help-admin` — full admin command list (Manage Server). Both ephemeral, built from `lib/command-catalog.js`.
 - All date displays include the year: "Monday, April 20, 2026"
 - UTC date-shift bug fixed: `utils.todayCentral()` used everywhere "today" is needed
 - SIGTERM/SIGINT graceful shutdown handlers
@@ -200,7 +207,7 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 
 - **Repo connected:** `aotto3/SBIBot`, branch `main`
 - **Pre-deploy command:** `node deploy-commands.js`
-- **Start command:** `npm start`
+- **Start command:** `node index.js` — set this in the Railway UI, **not** `npm start`, or every redeploy emails a false "deployment crashed"
 - **Volume:** mounted at `/data` — set `DB_PATH=/data/db.sqlite`
 - Deploys automatically on every push to `main`
 
@@ -220,5 +227,5 @@ To add a new show: update `SHOW_FULL_NAMES` in `lib/bookeo.js` AND `SHOW_GROUPS`
 - **MFB custom emojis** — verify `:Dno:` `:Hno:` `:Dmaybe:` `:Hmaybe:` exist in the Discord server with exactly those names (capital first letter)
 - **Lucidity** — not yet in Bookeo (show not open); shift DMs won't fire until added to bookeo-asst's `SHOW_GROUPS`
 - **`/schedule` and `/member-schedule`** — depend on bookeo-asst `/api/schedule` being live; verify with J Cameron Cooper
-- **Check-in alert channels** — run `/set-checkin-channel` for each eligible show (GGB, Lucidity, Endings) so no-show alerts have a destination channel
+- **Check-in alert channels** — run `/set-channel-override` (type: *Check-in Alerts*) for each eligible show (GGB, Lucidity, Endings) so no-show alerts have a destination channel
 - **Check-in contacts** — run `/add-checkin-contact` for each person who should be pinged on no-show alerts

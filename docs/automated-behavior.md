@@ -8,7 +8,7 @@ This document explains everything the bot does on its own, without anyone runnin
 
 ### Weekly Shift Summary (Monday mornings)
 
-Every Monday around 9:00 AM CT, the bot sends each cast member a private DM listing their shifts for the coming week. This is a heads-up only — no action is required.
+Every Monday around 8:48 AM CT, the bot sends each cast member a private DM listing their shifts for the coming week. This is a heads-up only — no action is required.
 
 If you do not receive this DM on a Monday, either:
 - Your Discord account is not linked yet (ask an admin to run `/link-member`)
@@ -18,7 +18,7 @@ If you do not receive this DM on a Monday, either:
 
 ### Daily Shift Reminder (Every morning)
 
-Every morning around 9:00 AM CT, the bot sends a private DM to anyone who has a shift in the next 24 hours. This DM includes:
+Every morning around 8:48 AM CT, the bot sends a private DM to anyone who has a shift in the next 24 hours. This DM includes:
 
 - The show name, date, and time
 - A **Check In** button for each shift you're required to check in for
@@ -50,6 +50,12 @@ When a cast member posts a coverage request, it appears in the show's coverage c
 - **❓** — Unsure
 
 You don't need to do anything else. The production team handles confirming coverage.
+
+---
+
+### Last-Minute Booking Alerts
+
+If your show had no bookings in the morning but someone books at the last minute, the bot DMs you (and the rest of the assigned cast) as soon as it detects the booking — usually a couple of hours before curtain. No action needed; it's just a heads-up that the show is now on.
 
 ---
 
@@ -90,7 +96,7 @@ Scans all open coverage shift posts. For any shift that still has uncovered role
 
 ---
 
-### 9:00 AM CT Daily — Shift DMs
+### 8:48 AM CT Daily — Shift DMs
 
 The bot sends personalized shift DMs to all linked cast members with shifts in the next 24 hours. These DMs include check-in buttons for any pending check-ins.
 
@@ -98,7 +104,7 @@ If a cast member is not linked via `/link-member`, they are silently skipped. Th
 
 ---
 
-### 9:00 AM CT Monday — Weekly Shift DMs
+### 8:48 AM CT Monday — Weekly Shift DMs
 
 The bot sends each linked cast member a DM covering their shifts for the coming 7 days. No check-in buttons are included — this is informational only.
 
@@ -107,6 +113,24 @@ The bot sends each linked cast member a DM covering their shifts for the coming 
 ### 9:00 PM CT Daily — EOD Coverage Summary
 
 If there are any unfilled coverage shifts or custom games, the bot sends a consolidated DM to the coverage manager. The summary lists every open item with the show, date/time, available cast members (by role for multi-role shows), and a direct link to each post. If nothing is outstanding, no DM is sent.
+
+---
+
+### 8:00 AM CT Sunday — Weekly Maybe-Nudge
+
+Once a week, the bot DMs anyone still marked "maybe" (❓) on an open, uncovered coverage shift or custom game, asking them to firm up to ✅ or ❌. One consolidated DM per person; covered, confirmed, cancelled, and past-dated posts are skipped.
+
+---
+
+### Late-Booking Watch (8:48 AM CT + timers)
+
+At 8:48am, alongside the daily shift DMs, the bot records any of today's shows that have zero bookings. For each, it schedules a check ~110 minutes before curtain; if the show has since booked, it DMs the assigned cast. Restart-safe — pending checks reschedule on startup.
+
+---
+
+### Scheduled-Job Failure Notifications
+
+Every scheduled job runs through a wrapper that reports problems. If a job **throws**, or completes but **silently drops items** (e.g. "sent 1 of 11 coverage pings"), the bot sends **one summary per run** — a DM to the ops contact (`/set-ops-contact`, defaults to the owner) and a post to the error channel (`/set-error-channel`) — naming the job, the sent/failed counts, and the affected items. An admin recovers with `/rerun-job`.
 
 ---
 
@@ -167,7 +191,7 @@ For meetings, RSVP tracking only applies to the original "just scheduled" post �
 |---|---|
 | Weekly shift DMs | Admin turns off "Weekly shift DMs" in `/bot-config` |
 | Daily shift DMs | Admin turns off "Daily 24hr shift DMs" in `/bot-config` |
-| Check-in alerts for a show | No alert channel set for that show (`/set-checkin-channel`) |
+| Check-in alerts for a show | No alert channel set for that show (`/set-channel-override`, type: Check-in Alerts) |
 | Shift DMs for a cast member | Member not linked via `/link-member` |
 | Check-in records for a cast member | Member not linked, or doesn't have the required show role |
 | EOD coverage summary | No coverage manager set (`/set-coverage-manager`) |
@@ -182,8 +206,10 @@ For meetings, RSVP tracking only applies to the original "just scheduled" post �
 | Bot startup | Startup DM to Allen, check-in seeding, alert timers set |
 | 12:05 AM CT | Check-in records seeded for the new day |
 | 8:00 AM CT | Meeting reminders + custom game 48h follow-ups + coverage role pings |
-| 9:00 AM CT | Daily shift DMs with check-in buttons |
-| 9:00 AM CT (Monday only) | Weekly shift DMs |
+| 8:48 AM CT | Daily shift DMs with check-in buttons; late-booking baseline recorded |
+| 8:48 AM CT (Monday only) | Weekly shift DMs |
+| 8:00 AM CT (Sunday only) | Weekly maybe-nudge DMs |
 | 9:00 PM CT | EOD coverage summary DM to coverage manager (if anything is open) |
+| ~110 min before curtain | Late-booking alert to cast if a blank show has since booked |
 | Call time (30 min before show) | No-show alert if cast member hasn't checked in |
-| Anytime | Fillable shift DMs, DM forwarding, RSVP tracker updates |
+| Anytime | Fillable shift DMs, DM forwarding, RSVP tracker updates, job-failure notices |

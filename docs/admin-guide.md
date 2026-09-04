@@ -12,7 +12,7 @@ Assumes you have **Manage Server** permission. All bot replies are ephemeral (pr
 4. [Schedule & Shift Reminders](#4-schedule--shift-reminders)
 5. [Coverage Requests](#5-coverage-requests)
 6. [Check-in Monitoring](#6-check-in-monitoring)
-7. [Bot Settings](#7-bot-settings)
+7. [Bot Settings & Ops](#7-bot-settings--ops)
 8. [Cleanup](#8-cleanup)
 9. [Command Reference](#9-command-reference)
 
@@ -25,8 +25,8 @@ Run these once when configuring the bot for the first time (or when something ch
 **Link all cast members**
 Use `/link-member` to connect each Discord user to their Bookeo name. This is required before shift DMs and check-ins will work for that person. See [Member Management](#2-member-management).
 
-**Set coverage channels**
-Use `/set-coverage-channel` to tell the bot where to post coverage requests for each show. MFB and The Endings require a separate channel per character — you'll need to run the command once per character.
+**Set coverage channels (optional)**
+By default the bot auto-resolves each show's channel by name convention. To override where a show's coverage requests post, use `/set-channel-override` (type: *Coverage Requests*). MFB and The Endings can be routed per character.
 
 | Show | `show` | `character` needed? |
 |---|---|---|
@@ -39,13 +39,16 @@ Use `/set-coverage-channel` to tell the bot where to post coverage requests for 
 Use `/set-coverage-manager` to designate who receives fillable-shift DMs and the nightly EOD coverage summary. Typically the person responsible for confirming coverage.
 
 **Set check-in alert channels**
-Use `/set-checkin-channel` for each check-in eligible show (GGB, Lucidity, The Endings). This is the channel where no-show alerts fire when a cast member misses their call time.
+Use `/set-channel-override` (type: *Check-in Alerts*) for each check-in-eligible show (GGB, Lucidity, The Endings). This is the channel where no-show alerts fire when a cast member misses their call time.
 
 **Add check-in contacts**
 Use `/add-checkin-contact` to add anyone who should be pinged on no-show alerts. Run once per person.
 
 **Set error channel**
-Use `/set-error-channel` to designate a channel for bot error messages.
+Use `/set-error-channel` to designate a channel for bot error messages — including scheduled-job failure notices.
+
+**Set ops contact**
+Use `/set-ops-contact` to designate who is DM'd when a scheduled job fails. Defaults to the bot owner until set.
 
 ---
 
@@ -166,14 +169,27 @@ Rows are labeled `Shift #N` or `Game #N` so you know which ID to use with `/canc
 
 ### Channel Configuration
 
-**`/set-coverage-channel`**
-Configure where coverage requests post. See [First-Time Setup](#1-first-time-setup) for the full breakdown.
+By default the bot auto-resolves channels by name convention; overrides let you redirect a specific kind of post (e.g. to a #test channel).
+
+**`/set-channel-override type:X show:X channel:#X [character:X]`**
+Override where a show's posts go. `type` is *Coverage Requests*, *Check-in Alerts*, or *Custom Game Requests*.
+
+**`/clear-channel-override`**
+Remove an override — the bot goes back to auto-resolving by name.
 
 **`/list-coverage-channels`**
-Shows the current channel assignment for every show/character.
+Shows the current channel routing for coverage, check-in alerts, and custom games.
 
 **`/set-coverage-manager`**
 Set who receives fillable-shift DMs and the nightly EOD coverage summary.
+
+### Excluding Someone from Coverage Pings
+
+The 8am role-ping reminders @-mention cast who haven't responded to an open coverage request. To stop pinging someone who is never available (they still see the posts, they're just not @-pinged):
+
+- `/add-coverage-exclusion user:@User` — stop targeting them in pings.
+- `/remove-coverage-exclusion user:@User` — resume.
+- `/list-coverage-exclusions` — see who's excluded.
 
 ---
 
@@ -194,12 +210,26 @@ Manually marks a cast member as checked in. Use when someone checked in by other
 
 ---
 
-## 7. Bot Settings
+## 7. Bot Settings & Ops
 
 **`/bot-config setting:X value:On|Off`**
 Toggle automated shift DMs:
-- `Weekly shift DMs` — Sunday DMs covering the next 7 days.
-- `Daily 24hr shift DMs` — morning DMs for shifts that day.
+- `Weekly shift DMs` — every **Monday 8:48am CT**, covering the next 7 days.
+- `Daily 24hr shift DMs` — every day **8:48am CT**, for shifts in the next 24 hours.
+
+**`/set-error-channel channel:#X`**
+Channel for operational error messages, including scheduled-job failure notices.
+
+**`/set-ops-contact user:@User`**
+Who gets DM'd when a scheduled job fails. Defaults to the bot owner.
+
+### Scheduled-job failures & recovery
+
+Every scheduled job (meeting reminders, coverage/game role-pings, shift DMs, EOD reminder, maybe-nudge, late-booking seed, check-in seeding) runs through a wrapper that reports failures. If a job **throws**, or finishes but **silently drops items** (e.g. "sent 1 of 11 pings"), the bot sends **one summary per run** — a DM to the ops contact and a post to the error channel — naming the job, the counts, and the affected items.
+
+**`/rerun-job job:X [mode:X] [preview:X]`**
+Re-run any scheduled job on demand (no redeploy) and get a sent/failed/skipped report. After a failure notice, this is how you recover.
+- For **Coverage role pings**, `mode` is `All` (re-ping every still-missing post) or `Smart` (skip posts already pinged today), and `preview:True` shows what would be sent without sending.
 
 ---
 
@@ -240,22 +270,31 @@ If the Discord post was already manually deleted, the purge still cleans up the 
 | **Coverage** | |
 | `/custom-game` | Post a custom game availability check |
 | `/cancel-custom-game` | Cancel a custom game and delete its post |
-| `/coverage-request` | (Cast member) Submit a coverage request |
-| `/cancel-coverage-request` | Cancel a single coverage shift by Shift ID |
+| `/coverage-request` | (Any member) Submit a coverage request |
+| `/cancel-coverage-request` | (Any member) Cancel a single coverage shift by ID |
 | `/open-coverage` | View and manage (Cancel/Confirm) all open requests and games |
 | `/list-outstanding-requests` | Read-only list of outstanding shifts + games, per-show, with links |
-| `/set-coverage-channel` | Set the coverage channel for a show/character |
-| `/list-coverage-channels` | List all configured coverage channels |
+| `/set-channel-override` | Override where a show's posts go (coverage / check-in alerts / games) |
+| `/clear-channel-override` | Remove a channel override |
+| `/list-coverage-channels` | List current channel routing |
 | `/set-coverage-manager` | Set who receives fillable DMs and EOD summary |
+| `/add-coverage-exclusion` | Exclude a user from targeted coverage pings |
+| `/remove-coverage-exclusion` | Re-enable coverage pings for a user |
+| `/list-coverage-exclusions` | List excluded users |
 | **Check-in** | |
 | `/checkin-status` | View check-in records for the last 3 days |
 | `/force-checkin` | Manually confirm a cast member as checked in |
-| `/set-checkin-channel` | Set the no-show alert channel for a show |
 | `/add-checkin-contact` | Add a user to no-show alert pings |
 | `/remove-checkin-contact` | Remove a user from no-show alert pings |
 | `/list-checkin-contacts` | List current no-show alert contacts |
-| **Bot Settings** | |
+| `/dev-checkin-test` | (Dev) Seed/clear test check-in records |
+| **Settings & Ops** | |
 | `/bot-config` | Toggle automated shift DMs on or off |
-| `/set-error-channel` | Set the channel for bot error messages |
+| `/set-error-channel` | Set the channel for bot error + job-failure messages |
+| `/set-ops-contact` | Set who is DM'd when a scheduled job fails |
+| `/rerun-job` | Re-run a scheduled job on demand (all / smart / preview) |
 | **Cleanup** | |
 | `/purge` | Hard-delete a coverage shift or custom game record and its post |
+| **Help** | |
+| `/help` | Member command list (any member) |
+| `/help-admin` | Full admin command list |

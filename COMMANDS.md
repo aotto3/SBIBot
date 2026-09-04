@@ -1,16 +1,18 @@
 # Bot Commands
 
-All commands are typed directly in Discord starting with `/`. Discord will show you a dropdown with options as you type — you don't need to memorize the exact format.
+All commands are typed directly in Discord starting with `/`. Discord shows a dropdown with options as you type — you don't need to memorize the exact format.
 
-**🔒 Manager commands** require the Manage Server permission.  
+**🔒 Manager commands** require the **Manage Server** permission.
 **👥 Anyone** means any server member can use it.
+
+Every reply is **private (ephemeral)** unless noted otherwise. For the in-Discord version of this list, run `/help` (member commands) or `/help-admin` (manager commands).
 
 ---
 
 ## Meetings
 
 ### `/schedule-meeting` 🔒
-Schedule a **one-time** meeting. The bot immediately posts an announcement in the chosen channel with ✅ ❌ ❓ reactions for RSVPs. Reminders are automatically sent 7 days and 24 hours before. Posts show start–end time (e.g. 7:00 PM – 9:00 PM) and a Google Calendar link.
+Schedule a **one-time** meeting. The bot immediately posts an announcement in the chosen channel with ✅ ❌ ❓ reactions for RSVPs, and automatically posts reminders 7 days and 24 hours before. Posts show start–end time (e.g. 7:00 PM – 9:00 PM), a Google Calendar link, and the Meeting ID.
 
 | Option | Required | Example |
 |---|---|---|
@@ -19,146 +21,131 @@ Schedule a **one-time** meeting. The bot immediately posts an announcement in th
 | `time` | ✅ | 7pm · 7:30pm · 19:00 |
 | `channel` | ✅ | #announcements |
 | `target` | ✅ | @everyone · @here · Specific members |
-| `duration` | optional | 1 hour (default) |
+| `duration` | optional | 30 min · 1 hour (default) · 1.5 / 2 / 3 hours |
 | `reminder_7d` | optional | on (default) |
 | `reminder_24h` | optional | on (default) |
 
-> **Target: Specific members** — Use this if you only want to ping certain people. After creating the meeting, use `/meeting-add-member` to add them.
-
-> The Meeting ID appears at the bottom of every reminder post. You'll need it for `/edit-meeting` and `/cancel-meeting`.
-
----
+> **Target: Specific members** — pings only certain people. After creating the meeting, use `/meeting-add-member` to add them.
+> The Meeting ID appears at the bottom of every reminder post — you need it for `/edit-meeting`, `/cancel-meeting`, and `/attendance`.
 
 ### `/schedule-recurring` 🔒
-Schedule a **repeating** meeting (weekly or monthly). Works the same as above but repeats automatically.
+Schedule a **repeating** meeting (weekly or monthly). Works like `/schedule-meeting` but repeats automatically. The creation post is a heads-up only; the **7-day reminder** is where RSVP reactions are added.
 
 | Option | Required | Example |
 |---|---|---|
 | `title` | ✅ | Monday All-Hands |
 | `recurrence` | ✅ | Weekly · Monthly |
-| `day` | ✅ | Monday · Friday · etc. |
+| `day` | ✅ | Sunday … Saturday |
 | `time` | ✅ | 7pm |
 | `channel` | ✅ | #cast |
 | `target` | ✅ | @everyone · @here · Specific members |
 | `week` | Monthly only | First · Second · Third · Fourth · Last |
 | `duration` | optional | 1 hour (default) |
-
-> The creation post is a heads-up only (no RSVP). The **7-day reminder** is when reactions are added for RSVPs.
-
----
+| `reminder_7d` / `reminder_24h` | optional | on (default) |
 
 ### `/edit-meeting` 🔒
-Edit an existing scheduled meeting. Only updates the database — already-posted reminder messages are not retroactively changed.
+Edit a scheduled meeting. Updates the database and refreshes any already-posted 7d/24h reminders with the new details.
 
 | Option | Required | Notes |
 |---|---|---|
-| `meeting_id` | ✅ | Shown on the post itself, or from `/meetings` |
-| `title` | optional | New title |
-| `date` | optional | New date — one-time meetings only |
-| `time` | optional | New start time |
-| `duration` | optional | New duration |
-| `channel` | optional | New channel for future reminders |
-
----
+| `meeting_id` | ✅ | From the post or `/meetings` |
+| `title` · `date` · `time` · `duration` · `channel` | optional | `date` applies to one-time meetings only |
 
 ### `/cancel-meeting` 🔒
-Cancel a meeting. Posts a strikethrough notice in the meeting's channel so everyone sees it's off.
-
-| Option | Required | Notes |
-|---|---|---|
-| `meeting_id` | ✅ | Shown on the post itself, or from `/meetings` |
-
----
-
-### `/meetings` 🔒
-List all active scheduled meetings with their IDs, schedules, and next occurrence. Only you can see the response.
-
----
-
-### `/meeting-add-member` 🔒
-Add someone to a **Specific members** meeting. Only needed if you chose "Specific members" as the target when creating the meeting.
+Cancel a meeting. Strikes through the original post and posts a cancellation notice in the channel with a link back to it.
 
 | Option | Required |
 |---|---|
 | `meeting_id` | ✅ |
-| `user` | ✅ — @mention them |
 
----
+### `/meetings` 🔒
+List all active scheduled meetings with IDs, schedules, and next occurrence.
+
+### `/meeting-add-member` 🔒
+Add someone to a **Specific members** meeting.
+
+| Option | Required |
+|---|---|
+| `meeting_id` | ✅ |
+| `user` | ✅ (@mention) |
 
 ### `/attendance` 🔒
-See a breakdown of who responded to a meeting's RSVP — attending, not attending, maybe, and (for specific-member meetings) who hasn't responded.
+Show who responded to a meeting's RSVP — attending, not attending, maybe, and (for specific-member meetings) who hasn't responded.
 
 | Option | Required | Notes |
 |---|---|---|
 | `meeting_id` | ✅ | |
-| `date` | optional | For recurring meetings — defaults to the most recent reminder |
-
----
-
-## Custom Game Availability
-
-### `/custom-game` 👥
-Post a custom game availability check for a show. The bot posts to the chosen channel and adds the correct reaction emojis. Responses are tracked live on the post.
-
-| Option | Required | Example |
-|---|---|---|
-| `show` | ✅ | Man From Beyond · The Endings · Great Gold Bird · Lucidity |
-| `date` | ✅ | April 20 · 4/20/2026 |
-| `channel` | ✅ | #mfb-cast |
-| `time` | optional | 7pm |
-
-**Post format:**
-```
-The Man From Beyond
-Custom Game Request
-@here Is anyone available on Tuesday, April 20, 2026 at 7:00 PM?
-Game ID: 42
-```
-
-**What happens automatically:**
-- Show-specific reactions are added. MFB uses custom emojis `:Dmaybe:` `:Hmaybe:` `:Dno:` `:Hno:` (plus ✅)
-- As people react, a live tracker updates on the post showing who responded. MFB shows a **Daphne / Houdini** section breakdown; other shows show emoji-grouped lists with role labels
-- Once every role is covered with ✅, the bot **privately DMs the requester** with the cast list
-- If unfilled after 48 hours, a reminder is posted in the channel. For MFB and The Endings it pings only the specific unfilled role(s); other shows get `@here`
-- The **Game ID is printed on the post itself** — use it with `/cancel-custom-game` if you need to pull the post
-
-**Show reactions:**
-
-| Show | Reactions |
-|---|---|
-| Man From Beyond | ✅ available · :Dmaybe: Daphne maybe · :Hmaybe: Houdini maybe · :Dno: Daphne no · :Hno: Houdini no |
-| The Endings | ✅ available · ❓ maybe · ❌ unavailable |
-| Great Gold Bird | ✅ available · ❓ maybe · ❌ unavailable |
-| Lucidity | ✅ available · ❓ maybe · ❌ unavailable |
-
-> Role labels (Daphne, Houdini, HR, Author) are pulled from Discord server roles. Mikey and Riley are assigned automatically for GGB and Lucidity.
-
----
-
-### `/cancel-custom-game` 🔒
-Cancel a custom game availability post. **Deletes the original post** from the channel and marks the game closed in the database.
-
-| Option | Required | Notes |
-|---|---|---|
-| `game_id` | ✅ | Printed on the post itself (bottom line) |
+| `date` | optional | Recurring meetings — defaults to the most recent reminder |
 
 ---
 
 ## Coverage Requests
 
+### `/coverage-request` 👥
+Request coverage for one or more of your own shifts. Opens a form where you enter the shift date(s) and time(s); the bot posts a coverage request (with a **Confirm Coverage** button) to the show's coverage channel and collects ✅ / ❌ / ❓ reactions from eligible cast.
+
+| Option | Required | Notes |
+|---|---|---|
+| `show` | ✅ | MFB · The Endings · GGB · Lucidity |
+| `character` | required for MFB & The Endings | Your character (Daphne/Houdini, HR/Author) |
+
+### `/cancel-coverage-request` 👥
+Cancel a single shift from one of your coverage requests. Edits the post to a cancelled state (never silently deletes).
+
+| Option | Required | Notes |
+|---|---|---|
+| `request_id` | ✅ | The `Coverage Request ID` printed on the post |
+
+### `/open-coverage` 🔒
+List all open coverage requests and custom games with **Cancel / Confirm** buttons to act on each one directly.
+
 ### `/list-outstanding-requests` 🔒
-A private, read-only overview of everything still outstanding — open **coverage shifts** and **custom games** that haven't been filled, confirmed, or cancelled, and whose date hasn't passed. Grouped one section per show, sorted soonest-first, with a jump link to each post.
+A read-only overview of everything still outstanding — open coverage shifts and custom games not yet filled, confirmed, or cancelled, dated today-or-later. Grouped one section per show, soonest-first, with a jump link to each post.
+
+| Option | Required | Notes |
+|---|---|---|
+| `show` | optional | Omit for **all shows** |
+
+Each row shows a status marker (🔴 needs coverage / 🟡 awaiting confirmation), the type + ID (`Shift #N` / `Game #N`), date, time, character, requester, and a link.
+
+> **`/open-coverage` vs `/list-outstanding-requests`:** `/open-coverage` gives you action **buttons**; `/list-outstanding-requests` is a filterable **read-only** list with links — best for a quick "what's still open?" scan.
+
+### `/purge` 🔒
+Hard-delete a coverage shift, coverage request, or custom game and its post (irreversible). For cleanup only.
+
+| Option | Required | Notes |
+|---|---|---|
+| `type` | ✅ | Coverage Shift · Custom Game |
+| `id` | ✅ | The shift/game ID |
+
+---
+
+## Custom Games
+
+### `/custom-game` 🔒
+Post a custom game availability check for a show. The bot posts to the chosen channel, adds show-specific reaction emojis, and tracks responses live on the post. Once every role is covered with ✅ it DMs the requester; if unfilled after 48h it posts a reminder pinging the specific unfilled role(s).
 
 | Option | Required | Example |
 |---|---|---|
-| `show` | optional | Man From Beyond · The Endings · Great Gold Bird · Lucidity (omit for **all shows**) |
+| `show` | ✅ | MFB · The Endings · GGB · Lucidity |
+| `date` | ✅ | April 20 · 4/20/2026 |
+| `time` | optional | 7pm |
 
-**Each row shows:**
-- A status marker — 🔴 **needs coverage** / **unfilled** (nobody yet) or 🟡 **awaiting confirmation** (someone stepped up, not finalized)
-- The type and ID — `Shift #N` or `Game #N` — for use with `/cancel-coverage-request`, `/cancel-custom-game`, or `/purge`
-- Date, time, character (multi-role shows only), the requester, and a **link to the post**
+**Show reactions:**
 
-> **`/open-coverage` vs `/list-outstanding-requests`:** `/open-coverage` gives you **Cancel/Confirm buttons** to act on items; `/list-outstanding-requests` is a **read-only** list you can filter by show — best for a quick "what's still open?" scan with links.
+| Show | Reactions |
+|---|---|
+| Man From Beyond | ✅ · `:Dmaybe:` `:Hmaybe:` (Daphne/Houdini maybe) · `:Dno:` `:Hno:` (Daphne/Houdini no) |
+| The Endings · GGB · Lucidity | ✅ available · ❓ maybe · ❌ unavailable |
+
+> The **Game ID** is printed on the post — use it with `/cancel-custom-game` or `/purge`.
+
+### `/cancel-custom-game` 🔒
+Cancel a custom game post — **deletes the original post** and marks the game closed.
+
+| Option | Required | Notes |
+|---|---|---|
+| `game_id` | ✅ | Printed on the post |
 
 ---
 
@@ -169,158 +156,157 @@ Show the full show schedule for the coming week, pulled from Bookeo.
 
 | Option | Required | Notes |
 |---|---|---|
-| `week_of` | optional | Start date — defaults to today |
+| `week_of` | optional | Defaults to today |
 
----
-
-### `/member-schedule` 🔒
+### `/member-schedule` 👥
 Show one cast member's upcoming shifts for the next 7 days.
 
 | Option | Required | Notes |
 |---|---|---|
-| `name` | one of these | First name as it appears in Bookeo (e.g. DeShae) |
+| `name` | one of these | First name as it appears in Bookeo |
 | `discord` | one of these | @mention a linked cast member |
-| `week_of` | optional | Start date — defaults to today |
-
----
+| `week_of` | optional | Defaults to today |
 
 ### `/send-shift-reminders` 🔒
-Send shift DMs — or preview exactly what would be sent to one person without actually DMing anyone. Normally runs automatically (Mondays for the week ahead, daily at 9am for the next 24 hours).
+Send shift DMs manually — or preview what would be sent to one person without sending. (Normally automatic: weekly on Mondays and daily, both at 8:48am CT.)
 
 | Option | Required | Notes |
 |---|---|---|
 | `mode` | optional | This week (default) · Next 24 hours |
-| `user` | optional | Only process this one person (omit for everyone) |
-| `preview` | optional | Show the DM text here instead of sending it — requires `user` |
-| `week_of` | optional | Start date — defaults to today |
-
-**Testing example:**
-```
-/send-shift-reminders mode:Next 24 hours user:@Emily preview:true
-```
-Shows exactly what Emily would receive for the next 24 hours. Nothing is sent.
+| `user` | optional | Only this person (omit for everyone) |
+| `preview` | optional | Show the DM text instead of sending — requires `user` |
+| `week_of` | optional | Defaults to today |
 
 ---
 
 ## Check-in System
 
-These commands manage the cast check-in system. On show days, eligible cast members receive a "Check in" button in their shift DM and can also run `/check-in` directly. If a cast member hasn't checked in by call time, the bot posts a no-show alert to the configured channel.
+On show days, eligible cast get a **Check in** button in their shift DM and can also run `/check-in`. If someone hasn't checked in by call time, the bot posts a no-show alert to the show's configured channel.
 
-**Eligible shows and roles:**
-- Great Gold Bird — Mikey (30 min before show)
-- Lucidity — Riley (30 min before show)
-- The Endings — HR only (Author is excluded)
-
-MFB does not use the check-in system.
+**Eligible shows/roles:** Great Gold Bird — Mikey · Lucidity — Riley · The Endings — HR only (Author excluded) · MFB — not eligible. Call time is 30 min before curtain.
 
 ### `/check-in` 👥
-Check in for your shift today. If you have one eligible shift, it confirms immediately. If you have multiple, a select menu lets you pick which show. Handles already-checked-in and no-shift cases with appropriate messages.
+Check in for your shift today. One eligible shift confirms immediately; multiple shows a picker.
 
----
+### `/checkin-status` 🔒
+Show check-in status for the last 3 days (✅ checked in · ⚠️ alert fired · 🔴 missed · ⏳ pending).
 
 ### `/force-checkin` 🔒
-Manually confirm a cast member as checked in (e.g. they showed up but couldn't use the button). If the no-show alert has already fired, the alert message is edited to show "Manually confirmed by @Admin at H:MM CT".
+Manually confirm a cast member as checked in. If the no-show alert already fired, it's edited to note the manual confirmation.
 
 | Option | Required | Notes |
 |---|---|---|
-| `user` | ✅ | @mention the cast member |
-| `show` | optional | Required if the person has multiple eligible shifts today |
+| `user` | ✅ | @mention |
+| `show` | optional | Required if they have multiple eligible shifts today |
 
----
-
-### `/set-checkin-channel` 🔒
-Set the channel where no-show alerts are posted for a specific show. Must be run once per show before the check-in system will fire alerts.
+### `/add-checkin-contact` · `/remove-checkin-contact` · `/list-checkin-contacts` 🔒
+Manage the no-show notification ping list. Contacts (plus the cast member) are pinged when a no-show alert fires.
 
 | Option | Required | Notes |
 |---|---|---|
-| `show` | ✅ | GGB · Lucidity · Endings |
-| `channel` | ✅ | #channel to post alerts in |
+| `user` | ✅ (add/remove) | @mention |
 
----
-
-### `/add-checkin-contact` 🔒
-Add a user to the no-show notification ping list. All contacts are pinged (along with the cast member themselves) when a no-show alert fires.
-
-| Option | Required |
-|---|---|
-| `user` | ✅ — @mention them |
-
----
-
-### `/remove-checkin-contact` 🔒
-Remove a user from the no-show notification list.
-
-| Option | Required |
-|---|---|
-| `user` | ✅ — @mention them |
-
----
-
-### `/list-checkin-contacts` 🔒
-Show the current no-show notification ping list.
-
----
-
-### `/dev-checkin-test` 🔒 *(dev/testing tool)*
-Developer commands for testing the check-in system. Not intended for regular use.
-
-| Subcommand | What it does |
-|---|---|
-| `seed` | Seed a test check-in record and send the DM button for a specific show/user |
-| `clear` | Delete all check-in records for today |
-
-| Option | Required | Notes |
-|---|---|---|
-| `action` | ✅ | seed · clear |
-| `show` | `seed` only | Which show to seed a record for |
-| `user` | `seed` only | Which cast member to test |
+### `/dev-checkin-test` 🔒 *(dev/testing)*
+Developer tool. `seed` seeds a test check-in record + DM button; `clear` deletes today's check-in records. Not for regular use.
 
 ---
 
 ## Cast Member Setup
 
-These commands connect a cast member's name in Bookeo to their Discord account, which enables shift DMs and shows their first name on RSVP posts.
+Connect a cast member's Bookeo name to their Discord account — required for shift DMs, check-ins, and first-name display on posts.
 
 ### `/link-member` 🔒
-Link a cast member's Bookeo name to their Discord account.
-
 | Option | Required | Example |
 |---|---|---|
-| `bookeo_name` | ✅ | Allen Otto *(full name as it appears in Bookeo)* |
+| `bookeo_name` | ✅ | Allen Otto *(full name as in Bookeo)* |
 | `discord` | ✅ | @Allen |
 
----
-
 ### `/unlink-member` 🔒
-Remove a cast member link (e.g. if someone leaves the cast).
-
 | Option | Required |
 |---|---|
-| `discord` | ✅ — @mention them |
-
----
+| `discord` | ✅ (@mention) |
 
 ### `/list-members` 🔒
 Show all current Bookeo ↔ Discord links.
 
 ---
 
-## Help
+## Coverage Configuration
 
-### `/help` 👥
-Show a summary of all available commands. Only you can see the response.
+### `/set-coverage-manager` 🔒
+Set who receives coverage "fillable" notifications and the 9pm EOD coverage reminder.
+
+| Option | Required |
+|---|---|
+| `user` | ✅ (@mention) |
+
+### `/set-channel-override` · `/clear-channel-override` · `/list-coverage-channels` 🔒
+Control where the bot posts, per show. By default the bot auto-resolves channels by name convention; overrides redirect a specific type of post (e.g. to a #test channel).
+
+`/set-channel-override` options:
+
+| Option | Required | Notes |
+|---|---|---|
+| `type` | ✅ | Coverage Requests · **Check-in Alerts** · Custom Game Requests |
+| `show` | ✅ | MFB · The Endings · GGB · Lucidity |
+| `channel` | ✅ | Target channel |
+| `character` | optional | For MFB/Endings per-character routing |
+
+> This is how you set the **check-in alert channel** for a show (type: *Check-in Alerts*). `/clear-channel-override` removes an override; `/list-coverage-channels` shows all current routing.
+
+### `/add-coverage-exclusion` · `/remove-coverage-exclusion` · `/list-coverage-exclusions` 🔒
+Exclude a user from **targeted coverage reminder pings** (the 8am role pings) — e.g. someone who is never available. They still see the posts; they just aren't @-pinged.
+
+| Option | Required | Notes |
+|---|---|---|
+| `user` | ✅ (add/remove) | @mention |
 
 ---
 
-## Bot Settings
+## Bot Settings & Ops
 
 ### `/bot-config` 🔒
-Turn automated shift DM features on or off.
+Toggle automated shift-DM features on or off.
 
 | Setting | What it does |
 |---|---|
-| Weekly shift DMs | DMs every cast member their shifts for the coming week every Monday at 9am |
-| Daily 24hr shift DMs | DMs cast members with shifts in the next 24 hours every day at 9am |
+| Weekly shift DMs | DMs each cast member their week ahead, Mondays 8:48am CT |
+| Daily 24hr shift DMs | DMs cast with shifts in the next 24h, daily 8:48am CT |
+
+### `/set-error-channel` 🔒
+Set the channel where the bot posts operational error messages (config bugs, and failure notices — see below).
+
+| Option | Required |
+|---|---|
+| `channel` | ✅ |
+
+### `/set-ops-contact` 🔒
+Set who gets a **DM when a scheduled job fails** (or silently drops work). Defaults to the bot owner until set.
+
+| Option | Required |
+|---|---|
+| `user` | ✅ (@mention) |
+
+### `/rerun-job` 🔒
+Re-run a scheduled job on demand (no redeploy) and get a sent/failed/skipped report. Use it after a failure notice.
+
+| Option | Required | Notes |
+|---|---|---|
+| `job` | ✅ | Coverage role pings · Custom-game reminders · Meeting reminders · EOD coverage reminder · Weekly maybe-nudge · Daily shift DMs · Late-booking seed · Check-in seeding |
+| `mode` | optional | **Coverage pings only** — All (re-ping every still-missing post) · Smart (skip posts already pinged today) |
+| `preview` | optional | **Coverage pings only** — show what would be sent without sending |
+
+> **Failure notifications:** if any scheduled job throws, or finishes but silently drops items (e.g. "sent 1 of 11"), the bot sends one summary — a DM to the ops contact **and** a post to the error channel. `/rerun-job` is the recovery tool.
+
+---
+
+## Help
+
+### `/help` 👥
+Show the commands available to everyone (a short list).
+
+### `/help-admin` 🔒
+Show all admin / management commands, grouped by category.
 
 ---
 
@@ -328,23 +314,19 @@ Turn automated shift DM features on or off.
 
 | I want to… | Command |
 |---|---|
-| Schedule a one-time event | `/schedule-meeting` |
-| Set up a repeating meeting | `/schedule-recurring` |
-| Edit a meeting's details | `/edit-meeting` |
-| Cancel a meeting | `/cancel-meeting` |
-| See all my meetings | `/meetings` |
-| See who's coming to a meeting | `/attendance` |
-| Ask who's free for a custom game | `/custom-game` |
-| Cancel and delete a custom game post | `/cancel-custom-game` |
-| See everything still outstanding (shifts + games) | `/list-outstanding-requests` |
-| See this week's show schedule | `/schedule` |
-| See someone's upcoming shifts | `/member-schedule` |
+| Schedule a one-time / recurring meeting | `/schedule-meeting` · `/schedule-recurring` |
+| Edit / cancel a meeting | `/edit-meeting` · `/cancel-meeting` |
+| See meetings / who's coming | `/meetings` · `/attendance` |
+| Ask for coverage on my shift | `/coverage-request` |
+| See / act on what's outstanding | `/list-outstanding-requests` · `/open-coverage` |
+| Post / cancel a custom game | `/custom-game` · `/cancel-custom-game` |
+| See the week's schedule / one person's shifts | `/schedule` · `/member-schedule` |
 | Send or preview shift DMs | `/send-shift-reminders` |
-| Connect a cast member to Discord | `/link-member` |
-| See all linked cast members | `/list-members` |
+| Check in for my shift | `/check-in` |
+| Confirm someone / see check-in status | `/force-checkin` · `/checkin-status` |
+| Set a check-in alert channel | `/set-channel-override` (type: Check-in Alerts) |
+| Link / list cast members | `/link-member` · `/list-members` |
+| Set coverage manager / ops contact / error channel | `/set-coverage-manager` · `/set-ops-contact` · `/set-error-channel` |
+| Re-run a failed job | `/rerun-job` |
 | Turn automated DMs on/off | `/bot-config` |
-| Check in for my shift today | `/check-in` |
-| Manually confirm someone checked in | `/force-checkin` |
-| Set the no-show alert channel | `/set-checkin-channel` |
-| Add/remove a no-show contact | `/add-checkin-contact` · `/remove-checkin-contact` |
-| See all commands | `/help` |
+| See all commands | `/help` · `/help-admin` |

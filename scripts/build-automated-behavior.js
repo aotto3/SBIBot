@@ -212,13 +212,13 @@ const doc = new Document({
       spacer(80),
 
       h2('Weekly Shift Summary \u2014 Monday mornings'),
-      p([r('Every Monday around '), b('9:00 AM CT'), r(', the bot sends each cast member a private DM listing their shifts for the coming week. This is informational only \u2014 no action is required.')]),
+      p([r('Every Monday around '), b('8:48 AM CT'), r(', the bot sends each cast member a private DM listing their shifts for the coming week. This is informational only \u2014 no action is required.')]),
       spacer(60),
       p([r('If you don\u2019t receive this on a Monday, either your Discord account isn\u2019t linked yet (ask an admin) or the weekly DM feature is turned off.')]),
 
       spacer(120),
       h2('Daily Shift Reminder \u2014 Every morning'),
-      p([r('Every morning around '), b('9:00 AM CT'), r(', the bot sends a DM to anyone with a shift in the next 24 hours. The DM includes:')]),
+      p([r('Every morning around '), b('8:48 AM CT'), r(', the bot sends a DM to anyone with a shift in the next 24 hours. The DM includes:')]),
       bullet([r('The show name, date, and time')]),
       bullet([r('A '), b('Check In'), r(' button for each shift requiring check-in')]),
       spacer(80),
@@ -270,11 +270,11 @@ const doc = new Document({
       bullet([r('Multi-role shows (MFB, Endings): pings only the specific roles still uncovered')]),
 
       spacer(160),
-      h2('9:00 AM CT Daily \u2014 Shift DMs'),
+      h2('8:48 AM CT Daily \u2014 Shift DMs'),
       p([r('Sends personalized DMs to all linked cast members with shifts in the next 24 hours, including check-in buttons for pending records. Unlinked cast members are silently skipped.')]),
 
       spacer(160),
-      h2('9:00 AM CT Monday Only \u2014 Weekly Shift DMs'),
+      h2('8:48 AM CT Monday Only \u2014 Weekly Shift DMs'),
       p([r('Sends each linked cast member a DM with their full week of shifts. No check-in buttons \u2014 informational only.')]),
 
       spacer(160),
@@ -302,6 +302,18 @@ const doc = new Document({
       h2('RSVP Tracking \u2014 Real-time'),
       p([r('When anyone adds or removes a reaction on a meeting reminder or custom game post, the bot updates the RSVP tracker section of that message in place automatically.')]),
 
+      spacer(160),
+      h2('8:00 AM CT Sunday \u2014 Weekly Maybe-Nudge'),
+      p([r('Once a week, the bot DMs anyone still marked \u201cmaybe\u201d (\u2753) on an open, uncovered coverage shift or custom game, asking them to firm up to \u2705 or \u274c. One consolidated DM per person; covered, confirmed, cancelled, and past-dated posts are skipped.')]),
+
+      spacer(160),
+      h2('Late-Booking Watch \u2014 8:48 AM CT + timers'),
+      p([r('At 8:48am, alongside the daily shift DMs, the bot records any of today\u2019s shows with zero bookings. For each, it schedules a check ~110 minutes before curtain; if the show has since booked, it DMs the assigned cast. Restart-safe \u2014 pending checks reschedule on startup.')]),
+
+      spacer(160),
+      h2('Scheduled-Job Failure Notifications'),
+      p([r('Every scheduled job runs through a wrapper that reports problems. If a job throws, or completes but silently drops items (e.g. \u201csent 1 of 11 coverage pings\u201d), the bot sends one summary per run \u2014 a DM to the ops contact ('), c('/set-ops-contact'), r(') and a post to the error channel ('), c('/set-error-channel'), r(') \u2014 naming the job, the counts, and the affected items. An admin recovers with '), c('/rerun-job'), r('.')]),
+
       spacer(200),
       divider(),
 
@@ -314,7 +326,7 @@ const doc = new Document({
         [
           ['Weekly shift DMs',              'Admin turns off \u201cWeekly shift DMs\u201d in /bot-config'],
           ['Daily shift DMs',               'Admin turns off \u201cDaily 24hr shift DMs\u201d in /bot-config'],
-          ['Check-in alerts for a show',    'No alert channel set for that show (/set-checkin-channel)'],
+          ['Check-in alerts for a show',    'No alert channel set for that show (/set-channel-override)'],
           ['Shift DMs for a cast member',   'Member not linked via /link-member'],
           ['Check-in records for a member', 'Member not linked, or missing the required show role'],
         ],
@@ -333,11 +345,14 @@ const doc = new Document({
         [
           ['Bot startup',              'DM to Allen, check-in seeding, alert timers set'],
           ['12:05 AM CT',              'Check-in records seeded for the new day'],
-          ['8:00 AM CT',               'Meeting reminders + custom game 48h follow-ups'],
-          ['9:00 AM CT',               'Daily shift DMs with check-in buttons'],
-          ['9:00 AM CT (Monday only)', 'Weekly shift DMs'],
+          ['8:00 AM CT',               'Meeting reminders + custom game 48h follow-ups + coverage role pings'],
+          ['8:48 AM CT',               'Daily shift DMs with check-in buttons; late-booking baseline recorded'],
+          ['8:48 AM CT (Monday only)', 'Weekly shift DMs'],
+          ['8:00 AM CT (Sunday only)', 'Weekly maybe-nudge DMs'],
+          ['9:00 PM CT',               'EOD coverage summary to the coverage manager (if anything is open)'],
+          ['~110 min before curtain',  'Late-booking alert to cast if a blank show has since booked'],
           ['Call time (30 min before show)', 'No-show alert if cast member hasn\u2019t checked in'],
-          ['Anytime',                  'DM forwarding, RSVP tracker updates'],
+          ['Anytime',                  'DM forwarding, RSVP tracker updates, job-failure notices'],
         ],
         [3200, 6160]
       ),
