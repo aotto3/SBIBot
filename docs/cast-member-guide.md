@@ -181,10 +181,25 @@ When a cast member posts a coverage request, you'll see it in the show's coverag
 
 Reacting ✅ lets the person requesting coverage (and the production team) see who's available. Once coverage is confirmed by an admin, the post will be updated to show it's covered.
 
+> **Heads up:** if you react ❓ (unsure) and the shift is still open, the bot may send you a friendly weekly DM asking you to firm up to ✅ or ❌.
+
+---
+
+## What the Bot DMs You Automatically
+
+You don't need to do anything to receive these — just keep your DMs open to the bot:
+
+- **Weekly shift summary** — Mondays, your shifts for the week ahead.
+- **Daily shift reminder** — each morning, any shift in the next 24 hours, with a **Check in** button when one is needed.
+- **Last-minute booking alert** — if a show that looked empty books at the last minute, a heads-up that you're on.
+- **Maybe nudge** — a weekly reminder to firm up any ❓ you left on an open coverage request.
+
+If you're not getting these, ask an admin to link your account with `/link-member`.
+
 ---
 
 ## Tips
 
 - All bot replies are **private by default** — only you can see them.
 - If the bot doesn't respond, it may be offline. Check with an admin.
-- Type `/help` at any time to see a quick list of available commands in Discord.
+- Type `/help` at any time to see the commands available to you in Discord.

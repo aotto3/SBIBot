@@ -445,6 +445,22 @@ const doc = new Document({
 
       spacer(120),
       body([run('Reacting ✅ lets the person requesting coverage (and the production team) see who’s available. Once coverage is confirmed by an admin, the post will be updated to show it’s covered.')]),
+      spacer(80),
+      body([bold('Heads up: '), run('if you react ❓ (unsure) and the shift is still open, the bot may send you a friendly weekly DM asking you to firm up to ✅ or ❌.')]),
+
+      spacer(200),
+      divider(),
+      spacer(80),
+
+      heading1('What the Bot DMs You Automatically'),
+      body([run('You don’t need to do anything to receive these — just keep your DMs open to the bot:')]),
+      spacer(80),
+      bullet([bold('Weekly shift summary'), run(' — Mondays, your shifts for the week ahead.')]),
+      bullet([bold('Daily shift reminder'), run(' — each morning, any shift in the next 24 hours, with a Check in button when one is needed.')]),
+      bullet([bold('Last-minute booking alert'), run(' — if a show that looked empty books at the last minute, a heads-up that you’re on.')]),
+      bullet([bold('Maybe nudge'), run(' — a weekly reminder to firm up any ❓ you left on an open coverage request.')]),
+      spacer(80),
+      body([run('If you’re not getting these, ask an admin to link your account with '), code('/link-member'), run('.')]),
 
       spacer(200),
       divider(),

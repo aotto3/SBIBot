@@ -215,7 +215,7 @@ const doc = new Document({
       spacer(80),
 
       h2('Set coverage channels'),
-      p([r('Use '), c('/set-coverage-channel'), r(' to set where coverage requests post. MFB and The Endings need a separate channel per character — run the command once per character.')]),
+      p([r('Use '), c('/set-channel-override'), r(' to set where coverage requests post. MFB and The Endings need a separate channel per character — run the command once per character.')]),
       spacer(80),
 
       simpleTable(
@@ -235,7 +235,7 @@ const doc = new Document({
       spacer(80),
 
       h2('Set check-in alert channels'),
-      p([r('Use '), c('/set-checkin-channel'), r(' for each check-in eligible show (GGB, Lucidity, The Endings). This is where no-show alerts fire when a cast member misses their call time.')]),
+      p([r('Use '), c('/set-channel-override'), r(' for each check-in eligible show (GGB, Lucidity, The Endings). This is where no-show alerts fire when a cast member misses their call time.')]),
       spacer(80),
 
       h2('Add check-in contacts'),
@@ -243,7 +243,11 @@ const doc = new Document({
       spacer(80),
 
       h2('Set error channel'),
-      p([r('Use '), c('/set-error-channel'), r(' to designate a channel for bot error messages.')]),
+      p([r('Use '), c('/set-error-channel'), r(' to designate a channel for bot error messages, including scheduled-job failure notices.')]),
+      spacer(80),
+
+      h2('Set ops contact'),
+      p([r('Use '), c('/set-ops-contact'), r(' to designate who is DM\'d when a scheduled job fails. Defaults to the bot owner until set.')]),
 
       divider(),
 
@@ -318,7 +322,7 @@ const doc = new Document({
 
       spacer(120),
       h2('Channel Configuration'),
-      bullet([c('/set-coverage-channel'), r(' — configure where coverage requests post. See First-Time Setup.')]),
+      bullet([c('/set-channel-override'), r(' — configure where coverage requests post. See First-Time Setup.')]),
       bullet([c('/list-coverage-channels'), r(' — shows current channel assignments for all shows.')]),
       bullet([c('/set-coverage-manager'), r(' — set who receives fillable-shift DMs and the nightly EOD coverage summary.')]),
 
@@ -335,11 +339,19 @@ const doc = new Document({
 
       divider(),
 
-      // ── 7. Bot Settings ───────────────────────────────────────────────────
-      h1('7. Bot Settings'),
+      // ── 7. Bot Settings & Ops ─────────────────────────────────────────────
+      h1('7. Bot Settings & Ops'),
       p([c('/bot-config setting:X value:On|Off'), r(' — toggle automated shift DMs.')]),
-      bullet([b('Weekly shift DMs'), r(' — Sunday DMs covering the next 7 days.')]),
-      bullet([b('Daily 24hr shift DMs'), r(' — morning DMs for shifts that day.')]),
+      bullet([b('Weekly shift DMs'), r(' — Monday 8:48am DMs covering the next 7 days.')]),
+      bullet([b('Daily 24hr shift DMs'), r(' — daily 8:48am DMs for shifts in the next 24 hours.')]),
+      spacer(80),
+      p([c('/set-error-channel channel:#X'), r(' — channel for operational errors and scheduled-job failure notices.')]),
+      p([c('/set-ops-contact user:@User'), r(' — who gets DM\'d when a scheduled job fails (defaults to the owner).')]),
+      spacer(80),
+
+      h2('Scheduled-job failures & recovery'),
+      p([r('Every scheduled job runs through a wrapper that reports problems. If a job throws, or finishes but silently drops items (e.g. "sent 1 of 11 pings"), the bot sends one summary per run — a DM to the ops contact and a post to the error channel — naming the job, the counts, and the affected items.')]),
+      p([c('/rerun-job job:X [mode:X] [preview:X]'), r(' — re-run any scheduled job on demand (no redeploy) with a sent/failed/skipped report. For coverage role pings, '), b('mode'), r(' is All or Smart (skip posts already pinged today), and '), b('preview:True'), r(' shows what would send without sending.')]),
 
       divider(),
 
@@ -402,9 +414,14 @@ const doc = new Document({
             ['/coverage-request',       '(Cast member) Submit a coverage request'],
             ['/cancel-coverage-request','Cancel a single coverage shift by Shift ID'],
             ['/open-coverage',          'View and manage all open requests and games'],
-            ['/set-coverage-channel',   'Set the coverage channel for a show/character'],
-            ['/list-coverage-channels', 'List all configured coverage channels'],
+            ['/list-outstanding-requests', 'Read-only list of outstanding shifts + games, with links'],
+            ['/set-channel-override',   'Override where a show\'s posts go (coverage / games)'],
+            ['/clear-channel-override', 'Remove a channel override'],
+            ['/list-coverage-channels', 'List current channel routing'],
             ['/set-coverage-manager',   'Set who receives fillable DMs and EOD summary'],
+            ['/add-coverage-exclusion', 'Exclude a user from targeted coverage pings'],
+            ['/remove-coverage-exclusion', 'Re-enable coverage pings for a user'],
+            ['/list-coverage-exclusions', 'List excluded users'],
           ],
         },
         {
@@ -412,23 +429,32 @@ const doc = new Document({
           commands: [
             ['/checkin-status',        'View check-in records for the last 3 days'],
             ['/force-checkin',         'Manually confirm a cast member as checked in'],
-            ['/set-checkin-channel',   'Set the no-show alert channel for a show'],
+            ['/set-channel-override',   'Set the no-show alert channel for a show'],
             ['/add-checkin-contact',   'Add a user to no-show alert pings'],
             ['/remove-checkin-contact','Remove a user from no-show alert pings'],
             ['/list-checkin-contacts', 'List current no-show alert contacts'],
           ],
         },
         {
-          heading: 'Bot Settings',
+          heading: 'Settings & Ops',
           commands: [
             ['/bot-config',       'Toggle automated shift DMs on or off'],
-            ['/set-error-channel','Set the channel for bot error messages'],
+            ['/set-error-channel','Set the channel for bot error + job-failure messages'],
+            ['/set-ops-contact',  'Set who is DM\'d when a scheduled job fails'],
+            ['/rerun-job',        'Re-run a scheduled job on demand (all / smart / preview)'],
           ],
         },
         {
           heading: 'Cleanup',
           commands: [
             ['/purge', 'Hard-delete a coverage shift or custom game record and its post'],
+          ],
+        },
+        {
+          heading: 'Help',
+          commands: [
+            ['/help',       'Member command list (any member)'],
+            ['/help-admin', 'Full admin command list'],
           ],
         },
       ]),
