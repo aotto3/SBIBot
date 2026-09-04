@@ -73,7 +73,7 @@ function makeSetup(opts) {
   const fakeMessage = {
     id:      pingMsgId,
     partial: false,
-    content: `<@U1> <@U2> Reminder: coverage still needed for Mon Jun 15 at 7:00pm — react ✅ if you're available: https://discord.com/channels/guild-1/ch-1/${originalMsgId}`,
+    content: `<@U1> <@U2> Reminder: coverage still needed for Mon Jun 15 at 7:00pm — react ✅ ❓ ❌ to the original request ASAP: https://discord.com/channels/guild-1/ch-1/${originalMsgId}`,
     guild:   { id: 'guild-1' },
     edit:    async (newContent) => { edited.push(newContent); },
   };
@@ -121,9 +121,9 @@ test('ping redirect — first mis-react: removes reaction, DMs user, edits messa
   assert.ok(dms[0].text.includes('http'),            'DM should include a link');
 
   assert.equal(edited.length, 1, 'ping message should be edited once');
-  assert.ok(edited[0].includes('React ASAP'),        'edit should contain new call-to-action');
-  assert.ok(edited[0].includes('original message'),  'edit should mention original message');
-  assert.ok(!edited[0].includes('react ✅'),          'edit should not contain old call-to-action');
+  assert.ok(edited[0].includes('to the original request ASAP'), 'edit should contain new call-to-action');
+  assert.ok(edited[0].includes('✅ ❓ ❌'),                        'edit should spell out the possible reactions');
+  assert.ok(!edited[0].includes("if you're available"),         'edit should not contain old call-to-action');
 
   // DB flag should be set
   assert.equal(repo.getPingByMessageId('ping-msg-1').redirected, 1, 'redirected flag should be set');
