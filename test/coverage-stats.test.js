@@ -388,6 +388,93 @@ test('buildStatsEmbeds — renders a Most-needed field with show/weekday/charact
   assert.ok(field.value.includes('By character'), 'shows the by-character line when a multi-role show is present');
 });
 
+// ─── filters + person detail (slice #148) ─────────────────────────────────────
+
+test('filters — show narrows every section to that show', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ id: 1, show: 'GGB', status: 'covered', confirmed_taker_id: 'A', requester_id: 'B' }),
+    shiftRow({ id: 2, show: 'MFB', character: 'Daphne', status: 'covered', confirmed_taker_id: 'C', requester_id: 'D' }),
+  ], { show: 'GGB', now: FIXED_NOW });
+  assert.ok(stats.leaderboard.every(e => ['A', 'B'].includes(e.id)), 'only GGB participants remain');
+  assert.ok(!stats.mostNeeded.byShow.some(e => e.show === 'MFB'), 'MFB excluded from most-needed');
+  assert.equal(stats.filters.show, 'GGB');
+});
+
+test('filters — since keeps only shifts on/after the date', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ id: 1, date: '2026-06-01', status: 'covered', confirmed_taker_id: 'EARLY' }),
+    shiftRow({ id: 2, date: '2026-07-01', status: 'covered', confirmed_taker_id: 'LATE' }),
+  ], { since: '2026-06-15', now: FIXED_NOW });
+  assert.ok(stats.leaderboard.some(e => e.id === 'LATE'));
+  assert.ok(!stats.leaderboard.some(e => e.id === 'EARLY'), 'earlier shift excluded');
+});
+
+test('filters — none applied means all rows and null filters', () => {
+  const stats = computeCoverageStats([shiftRow({ status: 'covered', confirmed_taker_id: 'A' })]);
+  assert.deepEqual(stats.filters, { show: null, since: null, person: null });
+  assert.equal(stats.person, null);
+});
+
+test('person detail — headline covers/requests/ratio for the selected person', () => {
+  const { person } = computeCoverageStats([
+    shiftRow({ id: 1, show: 'GGB', status: 'covered', confirmed_taker_id: 'P', requester_id: 'X' }),
+    shiftRow({ id: 2, show: 'MFB', character: 'Daphne', status: 'covered', confirmed_taker_id: 'P', requester_id: 'Y' }),
+    shiftRow({ id: 3, show: 'GGB', status: 'covered', confirmed_taker_id: 'Z', requester_id: 'P' }),
+    shiftRow({ id: 4, show: 'GGB', status: 'cancelled', requester_id: 'P' }),
+  ], { person: 'P', now: FIXED_NOW });
+  assert.equal(person.id, 'P');
+  assert.equal(person.covers, 2);
+  assert.equal(person.requests, 1);
+  assert.equal(person.requestsCancelled, 1);
+  assert.equal(person.ratio, 2);
+  assert.equal(person.coversByShow.find(e => e.show === 'GGB').count, 1);
+  assert.equal(person.coversByShow.find(e => e.show === 'MFB').count, 1);
+});
+
+test('person detail — respects show + since filters', () => {
+  const { person } = computeCoverageStats([
+    shiftRow({ id: 1, show: 'GGB', date: '2026-06-01', status: 'covered', confirmed_taker_id: 'P' }),
+    shiftRow({ id: 2, show: 'MFB', character: 'Daphne', date: '2026-06-01', status: 'covered', confirmed_taker_id: 'P' }),
+  ], { person: 'P', show: 'GGB', now: FIXED_NOW });
+  assert.equal(person.covers, 1, 'only the GGB cover counts under the show filter');
+});
+
+test('person detail — unknown person renders zeros, not an error', () => {
+  const { person } = computeCoverageStats(
+    [shiftRow({ status: 'covered', confirmed_taker_id: 'A' })],
+    { person: 'NOBODY' },
+  );
+  assert.equal(person.covers, 0);
+  assert.equal(person.requests, 0);
+  assert.equal(person.ratio, null);
+});
+
+test('buildStatsEmbeds — person filter renders a detail embed, not the leaderboard', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ id: 1, status: 'covered', confirmed_taker_id: 'A', requester_id: 'B', request_created_at: T0, confirmed_at: T0 + 5 * 3600, date: '2026-06-10' }),
+  ], { person: 'A', now: FIXED_NOW });
+  const [embed] = buildStatsEmbeds(stats, { resolveName });
+  assert.ok(embed.title.includes('Alice'), 'title names the person');
+  assert.ok(embed.description.includes('Covered'), 'shows the headline');
+  const timing = (embed.fields ?? []).find(f => f.name.includes('Timing'));
+  assert.ok(timing && timing.value.includes('Response time'), 'shows their response time');
+});
+
+test('buildStatsEmbeds — show filter appears in the leaderboard title', () => {
+  const stats = computeCoverageStats(
+    [shiftRow({ show: 'GGB', status: 'covered', confirmed_taker_id: 'A' })],
+    { show: 'GGB', now: FIXED_NOW },
+  );
+  assert.ok(buildStatsEmbeds(stats, { resolveName })[0].title.includes('Great Gold Bird'));
+});
+
+test('buildStatsEmptyState — names the show when filtered', () => {
+  assert.equal(
+    buildStatsEmptyState('Great Gold Bird'),
+    '✅ No coverage activity recorded yet for Great Gold Bird.',
+  );
+});
+
 // ─── owner gate ───────────────────────────────────────────────────────────────
 
 test('isOwner — allows the owner id and denies everyone else', () => {
