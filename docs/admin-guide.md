@@ -167,6 +167,21 @@ Rows are labeled `Shift #N` or `Game #N` so you know which ID to use with `/canc
 
 > **`/open-coverage` vs `/list-outstanding-requests`:** use `/open-coverage` when you want to **act** (Cancel/Confirm buttons); use `/list-outstanding-requests` when you just want to **see** what's outstanding — with statuses, per-show filtering, and links.
 
+### Coverage Stats (owner only)
+
+**`/coverage-stats [show:X] [person:@user] [since:DATE]`**
+A running log of who has requested coverage and who has covered for them. This command is **owner only** — other admins can't see or run it. The reply is private.
+
+The report covers your whole history and includes:
+- **Leaderboard** — per person: shifts + games they've **covered**, shifts they've **requested** (cancelled requests shown separately), and a give/take ratio.
+- **Fill rate** — how requests resolved: covered / cancelled / never-filled-and-passed, overall and per show.
+- **Timing** — median & average time to coverage (measured to when a cover is *confirmed*), and lead time (how far ahead of showtime people request).
+- **Most-needed** — which shows, weekdays, and characters generate the most requests.
+
+Options (all optional): `show:` limits to one show, `person:` shows one person's detail instead of the leaderboard, and `since:` includes only shifts on/after a date (e.g. `2026-01-01`).
+
+> **Custom games:** who covers a custom game is recorded from the day this feature shipped forward, so game covers before then won't appear. Coverage-shift stats are complete for all history.
+
 ### Channel Configuration
 
 By default the bot auto-resolves channels by name convention; overrides let you redirect a specific kind of post (e.g. to a #test channel).
@@ -274,6 +289,7 @@ If the Discord post was already manually deleted, the purge still cleans up the 
 | `/cancel-coverage-request` | (Any member) Cancel a single coverage shift by ID |
 | `/open-coverage` | View and manage (Cancel/Confirm) all open requests and games |
 | `/list-outstanding-requests` | Read-only list of outstanding shifts + games, per-show, with links |
+| `/coverage-stats` | (Owner only) Running log of covers, requests, fill rate, timing, most-needed |
 | `/set-channel-override` | Override where a show's posts go (coverage / check-in alerts / games) |
 | `/clear-channel-override` | Remove a channel override |
 | `/list-coverage-channels` | List current channel routing |

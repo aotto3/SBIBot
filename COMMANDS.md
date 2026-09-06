@@ -3,6 +3,7 @@
 All commands are typed directly in Discord starting with `/`. Discord shows a dropdown with options as you type — you don't need to memorize the exact format.
 
 **🔒 Manager commands** require the **Manage Server** permission.
+**👑 Owner only** means only the bot owner can use it (hidden from other admins).
 **👥 Anyone** means any server member can use it.
 
 Every reply is **private (ephemeral)** unless noted otherwise. For the in-Discord version of this list, run `/help` (member commands) or `/help-admin` (manager commands).
@@ -109,6 +110,17 @@ A read-only overview of everything still outstanding — open coverage shifts an
 Each row shows a status marker (🔴 needs coverage / 🟡 awaiting confirmation), the type + ID (`Shift #N` / `Game #N`), date, time, character, requester, and a link.
 
 > **`/open-coverage` vs `/list-outstanding-requests`:** `/open-coverage` gives you action **buttons**; `/list-outstanding-requests` is a filterable **read-only** list with links — best for a quick "what's still open?" scan.
+
+### `/coverage-stats` 👑
+A running log of coverage activity — **owner only** (not available to other admins). A private, ephemeral report covering the whole history: a per-person leaderboard (covers, requests, give/take ratio), fill rate (covered / cancelled / never-filled), timing (time-to-coverage and how far ahead people request), and the most-needed shows/weekdays/characters. Custom-game covers are counted from the day this shipped forward.
+
+| Option | Required | Notes |
+|---|---|---|
+| `show` | optional | Limit to one show (default: all shows) |
+| `person` | optional | Show one person's detail instead of the leaderboard |
+| `since` | optional | Only include shifts on/after this date (e.g. `2026-01-01`) |
+
+> "Time to coverage" is measured to the moment a cover is **confirmed** (an upper bound on true response time), not to the first "yes."
 
 ### `/purge` 🔒
 Hard-delete a coverage shift, coverage request, or custom game and its post (irreversible). For cleanup only.
@@ -319,6 +331,7 @@ Show all admin / management commands, grouped by category.
 | See meetings / who's coming | `/meetings` · `/attendance` |
 | Ask for coverage on my shift | `/coverage-request` |
 | See / act on what's outstanding | `/list-outstanding-requests` · `/open-coverage` |
+| See who's covering / requesting (owner) | `/coverage-stats` |
 | Post / cancel a custom game | `/custom-game` · `/cancel-custom-game` |
 | See the week's schedule / one person's shifts | `/schedule` · `/member-schedule` |
 | Send or preview shift DMs | `/send-shift-reminders` |

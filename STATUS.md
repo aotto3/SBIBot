@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/aotto3/SBIBot  
 **Production:** Railway (auto-deploys from `main` branch)  
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-06
 
 ---
 
@@ -173,6 +173,15 @@ Cast members on eligible shows receive a green "Check in: [Show Name]" button in
 - `lib/coverage-jobs.js` — `runCoverageRolePings(discord, repo)` (8am role pings) and `runEodCoverageReminder(discord, repo)` (9pm EOD DMs); `scheduler.js` is a thin orchestrator that imports and calls these
 - `lib/coverage-session.js` — multi-role confirmation state is DB-backed (`coverage_confirmation_sessions` table) so partial selections survive bot restarts; sessions expire after 30 minutes (checked at read time + startup cleanup)
 - `/list-outstanding-requests` (admin, ephemeral) — read-only list of outstanding coverage shifts + custom games (open, not filled/confirmed/cancelled, date-not-passed), grouped per show, optional `show` filter, 🔴/🟡 status, jump link per row. Pure `coverage.buildOutstandingEmbeds` / `buildOutstandingEmptyState`; date-filtered `db.getOutstandingCoverageShifts` / `db.getOutstandingCustomGames` (separate from the 8am-ping queries). PRD #124, slices #125–#127.
+
+### Coverage stats (`/coverage-stats`, PRD #143)
+**Owner-only** (hidden from other admins via `default_member_permissions` + a hard owner-ID check in `lib/owner.js`), ephemeral. A running log of coverage activity, fully retroactive for shifts:
+- **Leaderboard** — per person: covers (shifts + games), requests (shifts only; cancelled shown separately), give/take ratio.
+- **Fill rate** — covered / cancelled / never-filled-and-passed, overall + per show.
+- **Timing** — time-to-coverage (request → *confirmed*, an upper bound on response time) + lead time (request → showtime), median & average.
+- **Most-needed** — requests grouped by show / weekday / character.
+- **Filters** — `show`, `person` (renders a per-person detail view), `since`.
+- Deep pure module `lib/coverage-stats.js` (`computeCoverageStats` + `buildStatsEmbeds`); data via `repo.getStatsShiftRows` / `repo.getStatsGameRows`. New `custom_games.takers` column records who took each game **going forward** (past games can't be credited); folded into leaderboard covers + fill rate. `lib/owner.js` is the single source of truth for the owner ID (also used by `index.js`, `dm-channels.js`, `job-notifier.js`). Slices #144–#149.
 
 ### Job failure notifications & recovery (issue #131)
 Every scheduled cron job runs through a shared `runJob` wrapper (`lib/job-notifier.js`) that catches thrown errors **and** inspects each batch job's `{ planned, sent, failed[] }` summary. On a hard failure or a partial drop ("sent 1 of 11"), it sends one notice per run — a **DM to the ops contact** and a post to the **error channel**.

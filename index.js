@@ -85,9 +85,9 @@ client.once(Events.ClientReady, async c => {
 
 // ─── DM forwarding ───────────────────────────────────────────────────────────
 // Forward any DM received by the bot to Allen so cast member questions don't
-// go unnoticed. Allen's ID is hardcoded — change here if ownership transfers.
+// go unnoticed. Owner ID comes from lib/owner.js (single source of truth).
 
-const ALLEN_DISCORD_ID = '302924689704222723';
+const { OWNER_DISCORD_ID: ALLEN_DISCORD_ID } = require('./lib/owner');
 
 client.on(Events.MessageCreate, async message => {
   // Only handle DMs, not guild messages
