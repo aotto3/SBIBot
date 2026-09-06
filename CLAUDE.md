@@ -18,7 +18,7 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - `pack.py`: always `--validate false` (validator crashes on cp1252/Unicode bug on this machine)
 
 ## Architecture
-`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,coverage-repository,coverage-session,coverage-jobs,confirm,utils,checkin,scheduler}.js`
+`commands/*.js` → `lib/{db,meetings,bookeo,shows,rsvp,coverage,coverage-repository,coverage-session,coverage-jobs,coverage-stats,confirm,utils,checkin,scheduler,owner}.js`
 
 - SQLite: `node:sqlite` (Node 24 built-in) — NOT `better-sqlite3` (native compile fails on Railway)
 - Commands: guild-scoped (instant). Re-run `deploy-commands.js` on any change.
@@ -74,6 +74,12 @@ DB_PATH: `../db.sqlite` (local) | `/data/db.sqlite` (Railway)
 - **Coverage DB layer:** `lib/coverage-repository.js` wraps all coverage-related `db.js` calls with clean named methods (e.g. `repo.getOpenShifts()`, `repo.confirmShift()`). All coverage callers (`rsvp.js`, `coverage-jobs.js`) use repo — not `db` directly.
 - **Coverage cron jobs:** `lib/coverage-jobs.js` exports `runCoverageRolePings(discord, repo)` (8am role pings) and `runEodCoverageReminder(discord, repo)` (9pm EOD DM to cast manager). `scheduler.js` imports and calls them, passing the module-level `repo`.
 - **Outstanding list (`/list-outstanding-requests`, PRD #124 / slices #125–#127):** admin (ManageGuild), ephemeral, read-only embed list of everything still outstanding — open coverage shifts + custom games that are not cancelled, not filled/confirmed, and dated today-or-later. Optional `show` option filters to one show (omit = all). One embed per show; coverage shifts and games interleaved soonest-first; 🔴 needs coverage / unfilled, 🟡 ready to fill / filled — awaiting confirmation; each row carries a type+ID (`Shift #N`/`Game #N`), requester (name for coverage, `<@id>` for games), and a jump link (shift post → header fallback). Distinct from `/open-coverage`, which carries Cancel/Confirm buttons — this one is a filterable read-only view with links. Data: `repo.getOutstandingShifts(today, show?)` / `repo.getOutstandingGames(today, show?)` → `db.getOutstandingCoverageShifts` / `db.getOutstandingCustomGames` (date-filtered; the 8am-ping queries `getOpenShifts`/`getOpenGames` are deliberately left untouched). Pure render: `coverage.buildOutstandingEmbeds(shifts, games, guildId, showFilter)` (grouping, sort, status/emoji, links, 4096-char "…and N more" clamp) + `coverage.buildOutstandingEmptyState(showLabel?)`.
+
+## Coverage stats (`/coverage-stats`, PRD #143)
+- **Owner-only** admin command — a running log/report of coverage requests & covers. Gate: `owner.isOwner(interaction.user.id)` (single source of truth `owner.OWNER_DISCORD_ID`, reused by `index.js`, `dm-channels.js`, `job-notifier.js`); `default_member_permissions = Administrator` hides it in the UI but the ID check is the real gate. Ephemeral.
+- **Deep module `lib/coverage-stats.js`:** `computeCoverageStats(rows, opts)` (pure — operates on Discord IDs) + `buildStatsEmbeds(stats, { resolveName, ... })` (pure render, name resolver injected) + `buildStatsEmptyState()`. Data: `repo.getStatsShiftRows()` → `db.getCoverageStatsShiftRows()` (all shifts, every status, joined with request info; fully retroactive).
+- **Slice 1 (#144) = leaderboard only:** per-person covers (`confirmed_taker_id`), requests (shifts only, cancelled counted separately as `requestsCancelled`), give/take ratio (`covers/requests`, null when 0 requests). Remaining slices per PRD #143: fill-rate (#145), timing (#146), most-needed (#147), filters + person-detail (#148), custom-game taker logging + games in stats (#149).
+- Unlinked members render as a Discord mention (`members.getDisplayName(id, `<@${id}>`)`).
 
 ## Job failure notifications & recovery (issue #131)
 - **`lib/job-notifier.js`:** `runJob(label, fn, notify)` wraps every cron handler — catches throws (hard failure) AND inspects the returned `{ planned, sent, failed[] }` summary (partial failure, e.g. "sent 1 of 11"); either fires one notice per run and never rethrows (so sibling jobs continue). `buildJobOutcomeNotice(outcome)` (pure) formats hard vs partial. `notifyJobOutcome(discord, outcome, { opsContactId, errorChannelId })` DMs the ops contact **and** posts to the error channel (each guarded independently).
