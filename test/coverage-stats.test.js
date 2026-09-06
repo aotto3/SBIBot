@@ -190,6 +190,86 @@ test('buildStatsEmptyState — friendly no-activity line', () => {
   assert.equal(buildStatsEmptyState(), '✅ No coverage activity recorded yet.');
 });
 
+// ─── computeCoverageStats — fill rate (slice #145) ────────────────────────────
+
+// Central stamp of this instant is "2027-01-01 06:00" (CST) — well after the
+// June 2026 fixtures, so open past shifts count as unfilled/passed.
+const FIXED_NOW = new Date('2027-01-01T12:00:00Z');
+const fr = rows => computeCoverageStats(rows, { now: FIXED_NOW }).fillRate;
+
+test('fillRate — a covered shift lands in the covered bucket at 100%', () => {
+  const { overall } = fr([shiftRow({ status: 'covered', confirmed_taker_id: 'T' })]);
+  assert.equal(overall.covered, 1);
+  assert.equal(overall.cancelled, 0);
+  assert.equal(overall.unfilledPassed, 0);
+  assert.equal(overall.coveredPct, 1);
+});
+
+test('fillRate — a cancelled shift lands in the cancelled bucket', () => {
+  const { overall } = fr([shiftRow({ status: 'cancelled' })]);
+  assert.equal(overall.cancelled, 1);
+  assert.equal(overall.covered, 0);
+  assert.equal(overall.unfilledPassed, 0);
+});
+
+test('fillRate — an open shift whose showtime has passed is unfilled/passed', () => {
+  const { overall } = fr([shiftRow({ status: 'open', date: '2026-06-01', time: '19:00' })]);
+  assert.equal(overall.unfilledPassed, 1);
+  assert.equal(overall.covered, 0);
+});
+
+test('fillRate — an open shift still in the future is pending and excluded from all buckets', () => {
+  const { overall } = fr([shiftRow({ status: 'open', date: '2099-01-01', time: '19:00' })]);
+  assert.deepEqual(
+    { c: overall.covered, x: overall.cancelled, u: overall.unfilledPassed },
+    { c: 0, x: 0, u: 0 },
+  );
+  assert.equal(overall.coveredPct, null, 'no resolved shifts → no percentage');
+});
+
+test('fillRate — coveredPct is covered / (covered + unfilled-passed); cancelled excluded', () => {
+  const { overall } = fr([
+    shiftRow({ id: 1, status: 'covered', confirmed_taker_id: 'T' }),
+    shiftRow({ id: 2, status: 'open', date: '2026-06-01', time: '19:00' }), // passed → miss
+    shiftRow({ id: 3, status: 'cancelled' }),                               // excluded from %
+  ]);
+  assert.equal(overall.coveredPct, 0.5);
+});
+
+test('fillRate — buckets are grouped per show', () => {
+  const { byShow } = fr([
+    shiftRow({ id: 1, show: 'GGB', status: 'covered', confirmed_taker_id: 'T' }),
+    shiftRow({ id: 2, show: 'MFB', character: 'Daphne', status: 'cancelled' }),
+  ]);
+  assert.equal(byShow.GGB.covered, 1);
+  assert.equal(byShow.MFB.cancelled, 1);
+  assert.equal(byShow.MFB.covered, 0);
+});
+
+test('buildStatsEmbeds — renders a Fill rate field with the three buckets', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ id: 1, status: 'covered', confirmed_taker_id: 'A', requester_id: 'B' }),
+    shiftRow({ id: 2, status: 'cancelled', requester_id: 'B' }),
+  ], { now: FIXED_NOW });
+  const [embed] = buildStatsEmbeds(stats, { resolveName });
+  const field = (embed.fields ?? []).find(f => f.name.includes('Fill rate'));
+  assert.ok(field, 'a Fill rate field should be present');
+  assert.ok(field.value.includes('1 covered'),          'shows covered count');
+  assert.ok(field.value.includes('1 cancelled'),        'shows cancelled count');
+  assert.ok(field.value.includes('0 unfilled/passed'),  'shows unfilled/passed count');
+});
+
+test('buildStatsEmbeds — omits the Fill rate field when nothing is resolved yet', () => {
+  const stats = computeCoverageStats(
+    [shiftRow({ status: 'open', date: '2099-01-01', time: '19:00', requester_id: 'A' })],
+    { now: FIXED_NOW },
+  );
+  const [embed] = buildStatsEmbeds(stats, { resolveName });
+  assert.ok(embed, 'leaderboard still renders (the requester is listed)');
+  const hasFill = (embed.fields ?? []).some(f => f.name.includes('Fill rate'));
+  assert.equal(hasFill, false, 'no Fill rate field when only pending shifts exist');
+});
+
 // ─── owner gate ───────────────────────────────────────────────────────────────
 
 test('isOwner — allows the owner id and denies everyone else', () => {
