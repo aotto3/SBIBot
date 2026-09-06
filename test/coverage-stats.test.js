@@ -270,6 +270,67 @@ test('buildStatsEmbeds — omits the Fill rate field when nothing is resolved ye
   assert.equal(hasFill, false, 'no Fill rate field when only pending shifts exist');
 });
 
+// ─── computeCoverageStats — timing (slice #146) ───────────────────────────────
+
+// 2026-06-01 12:00 UTC (07:00 CDT) as unix seconds — a stable request timestamp.
+const T0 = Math.floor(Date.UTC(2026, 5, 1, 12, 0, 0) / 1000);
+
+test('timing — time-to-coverage median & average over covered shifts (hours)', () => {
+  const { timing } = computeCoverageStats([
+    shiftRow({ id: 1, status: 'covered', confirmed_taker_id: 'T', request_created_at: T0, confirmed_at: T0 + 10 * 3600, date: '2026-06-10' }),
+    shiftRow({ id: 2, status: 'covered', confirmed_taker_id: 'T', request_created_at: T0, confirmed_at: T0 + 20 * 3600, date: '2026-06-10' }),
+    shiftRow({ id: 3, status: 'covered', confirmed_taker_id: 'T', request_created_at: T0, confirmed_at: T0 + 60 * 3600, date: '2026-06-10' }),
+  ]);
+  assert.equal(timing.timeToCoverage.count, 3);
+  assert.equal(timing.timeToCoverage.medianHours, 20); // sorted [10,20,60]
+  assert.equal(timing.timeToCoverage.avgHours, 30);    // (10+20+60)/3
+});
+
+test('timing — time-to-coverage ignores open and cancelled shifts', () => {
+  const { timing } = computeCoverageStats([
+    shiftRow({ status: 'open', request_created_at: T0, confirmed_at: null }),
+    shiftRow({ status: 'cancelled', request_created_at: T0, confirmed_at: null }),
+  ]);
+  assert.equal(timing.timeToCoverage.count, 0);
+  assert.equal(timing.timeToCoverage.medianHours, null);
+});
+
+test('timing — lead time is whole days from request to showtime across all shifts', () => {
+  const { timing } = computeCoverageStats([
+    shiftRow({ id: 1, request_created_at: T0, date: '2026-06-10' }), // 9 days
+    shiftRow({ id: 2, request_created_at: T0, date: '2026-06-02' }), // 1 day
+  ]);
+  assert.equal(timing.leadTime.count, 2);
+  assert.equal(timing.leadTime.medianDays, 5); // (1+9)/2
+  assert.equal(timing.leadTime.avgDays, 5);
+});
+
+test('timing — empty input yields null medians/averages and zero counts', () => {
+  const { timing } = computeCoverageStats([]);
+  assert.deepEqual(timing.timeToCoverage, { medianHours: null, avgHours: null, count: 0 });
+  assert.deepEqual(timing.leadTime, { medianDays: null, avgDays: null, count: 0 });
+});
+
+test('timing — a single value: median equals the value (no divide-by-zero)', () => {
+  const { timing } = computeCoverageStats([
+    shiftRow({ status: 'covered', confirmed_taker_id: 'T', request_created_at: T0, confirmed_at: T0 + 5 * 3600, date: '2026-06-02' }),
+  ]);
+  assert.equal(timing.timeToCoverage.medianHours, 5);
+  assert.equal(timing.timeToCoverage.avgHours, 5);
+});
+
+test('buildStatsEmbeds — renders a Timing field, labeling time-to-coverage as confirm time', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ status: 'covered', confirmed_taker_id: 'A', requester_id: 'B', request_created_at: T0, confirmed_at: T0 + 10 * 3600, date: '2026-06-10' }),
+  ], { now: FIXED_NOW });
+  const [embed] = buildStatsEmbeds(stats, { resolveName });
+  const field = (embed.fields ?? []).find(f => f.name.includes('Timing'));
+  assert.ok(field, 'a Timing field should be present');
+  assert.ok(field.value.includes('Time to coverage'),   'shows time-to-coverage');
+  assert.ok(field.value.includes('request → confirmed'), 'labels it as confirm time');
+  assert.ok(field.value.includes('Lead time'),           'shows lead time');
+});
+
 // ─── owner gate ───────────────────────────────────────────────────────────────
 
 test('isOwner — allows the owner id and denies everyone else', () => {
