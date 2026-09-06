@@ -57,7 +57,8 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const rows  = repo.getStatsShiftRows();
-    const stats = computeCoverageStats(rows, { show: showKey, person: person?.id, since, now: Date.now() });
+    const games = repo.getStatsGameRows();
+    const stats = computeCoverageStats(rows, { games, show: showKey, person: person?.id, since, now: Date.now() });
 
     // Linked members show as their first name; unlinked fall back to a mention.
     const resolveName = id => members.getDisplayName(id, `<@${id}>`);

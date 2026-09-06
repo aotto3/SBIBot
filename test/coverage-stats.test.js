@@ -475,6 +475,131 @@ test('buildStatsEmptyState — names the show when filtered', () => {
   );
 });
 
+// ─── custom-game taker logging + games in stats (slice #149) ──────────────────
+
+const { buildGameTakersRecord } = require('../lib/coverage-stats');
+
+function gameRow(overrides = {}) {
+  return {
+    id: 1, show: 'GGB', date: '2026-06-01', time: '19:00',
+    confirmed_at: null, filled_at: null, takers: null,
+    ...overrides,
+  };
+}
+const takersJson = arr => JSON.stringify(arr);
+
+test('buildGameTakersRecord — normalizes single-role and multi-role shapes', () => {
+  assert.deepEqual(buildGameTakersRecord([{ role: null, userId: 'U1' }]), [{ role: null, userId: 'U1' }]);
+  assert.deepEqual(
+    buildGameTakersRecord([{ role: 'HR', userId: 'U1' }, { role: 'Author', userId: 'U2' }]),
+    [{ role: 'HR', userId: 'U1' }, { role: 'Author', userId: 'U2' }],
+  );
+});
+
+test('buildGameTakersRecord — drops entries without a userId', () => {
+  assert.deepEqual(
+    buildGameTakersRecord([{ role: 'HR', userId: null }, { role: 'Author', userId: 'U2' }]),
+    [{ role: 'Author', userId: 'U2' }],
+  );
+});
+
+test('games — takers earn covers in the leaderboard, never requests', () => {
+  const stats = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: 111, takers: takersJson([{ role: null, userId: 'G' }]) })],
+    now: FIXED_NOW,
+  });
+  const g = stats.leaderboard.find(e => e.id === 'G');
+  assert.equal(g.covers, 1);
+  assert.equal(g.requests, 0);
+});
+
+test('games — a multi-role game credits every taker', () => {
+  const stats = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: 111, takers: takersJson([{ role: 'HR', userId: 'A' }, { role: 'Author', userId: 'B' }]) })],
+    now: FIXED_NOW,
+  });
+  assert.equal(stats.leaderboard.find(e => e.id === 'A').covers, 1);
+  assert.equal(stats.leaderboard.find(e => e.id === 'B').covers, 1);
+});
+
+test('games — null or malformed takers add no covers and never throw', () => {
+  const stats = computeCoverageStats([], {
+    games: [gameRow({ takers: null }), gameRow({ id: 2, takers: 'not json' })],
+    now: FIXED_NOW,
+  });
+  assert.deepEqual(stats.leaderboard, []);
+});
+
+test('games — confirmed with takers counts as covered in fill rate', () => {
+  const { fillRate } = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: 111, takers: takersJson([{ role: null, userId: 'G' }]) })],
+    now: FIXED_NOW,
+  });
+  assert.equal(fillRate.overall.covered, 1);
+});
+
+test('games — an open past game counts as unfilled/passed', () => {
+  const { fillRate } = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: null, date: '2026-06-01', time: '19:00' })],
+    now: FIXED_NOW,
+  });
+  assert.equal(fillRate.overall.unfilledPassed, 1);
+});
+
+test('games — confirmed WITHOUT takers (pre-logging or cancelled) is excluded from fill rate', () => {
+  const { fillRate } = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: 111, takers: null })],
+    now: FIXED_NOW,
+  });
+  assert.equal(fillRate.overall.covered, 0);
+  assert.equal(fillRate.overall.cancelled, 0);
+  assert.equal(fillRate.overall.unfilledPassed, 0);
+});
+
+test('games — a future pending game is excluded from fill rate', () => {
+  const { fillRate } = computeCoverageStats([], {
+    games: [gameRow({ confirmed_at: null, date: '2099-01-01', time: '19:00' })],
+    now: FIXED_NOW,
+  });
+  assert.equal(fillRate.overall.unfilledPassed, 0);
+});
+
+test('games — respect the show filter', () => {
+  const stats = computeCoverageStats([], {
+    games: [
+      gameRow({ id: 1, show: 'GGB', confirmed_at: 111, takers: takersJson([{ role: null, userId: 'GGBP' }]) }),
+      gameRow({ id: 2, show: 'MFB', confirmed_at: 111, takers: takersJson([{ role: null, userId: 'MFBP' }]) }),
+    ],
+    show: 'GGB', now: FIXED_NOW,
+  });
+  assert.ok(stats.leaderboard.some(e => e.id === 'GGBP'));
+  assert.ok(!stats.leaderboard.some(e => e.id === 'MFBP'), 'MFB game excluded under the GGB filter');
+});
+
+test('person detail — includes the person\'s game covers', () => {
+  const stats = computeCoverageStats([], {
+    games: [gameRow({ show: 'GGB', confirmed_at: 111, takers: takersJson([{ role: null, userId: 'P' }]) })],
+    person: 'P', now: FIXED_NOW,
+  });
+  assert.equal(stats.person.covers, 1);
+  assert.equal(stats.person.coversByShow.find(e => e.show === 'GGB').count, 1);
+});
+
+test('getStatsGameRows + setGameTakers — round-trip persists takers, credited as covers', () => {
+  const gid = repo.createGame({ channel_id: 'C1', show: 'Endings', date: '2026-08-01', time: '20:00', requester_id: 'ADMIN' });
+  repo.setGameMessageId(gid, 'GMSG-149');
+  repo.confirmGame(gid);
+  repo.setGameTakers(gid, buildGameTakersRecord([{ role: 'HR', userId: 'HRPERSON' }]));
+
+  const games = repo.getStatsGameRows();
+  const row   = games.find(g => g.id === gid);
+  assert.ok(row, 'the posted game appears in stats rows');
+  assert.ok(row.confirmed_at, 'confirmed_at is set');
+
+  const stats = computeCoverageStats([], { games, now: FIXED_NOW });
+  assert.equal(stats.leaderboard.find(e => e.id === 'HRPERSON').covers, 1);
+});
+
 // ─── owner gate ───────────────────────────────────────────────────────────────
 
 test('isOwner — allows the owner id and denies everyone else', () => {
