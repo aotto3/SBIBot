@@ -331,6 +331,63 @@ test('buildStatsEmbeds — renders a Timing field, labeling time-to-coverage as 
   assert.ok(field.value.includes('Lead time'),           'shows lead time');
 });
 
+// ─── computeCoverageStats — most-needed (slice #147) ──────────────────────────
+
+test('mostNeeded — groups by show, most requests first', () => {
+  const { mostNeeded } = computeCoverageStats([
+    shiftRow({ id: 1, show: 'GGB' }),
+    shiftRow({ id: 2, show: 'GGB' }),
+    shiftRow({ id: 3, show: 'MFB', character: 'Daphne' }),
+  ]);
+  assert.equal(mostNeeded.byShow[0].show, 'GGB');
+  assert.equal(mostNeeded.byShow[0].count, 2);
+  assert.ok(mostNeeded.byShow.some(e => e.show === 'MFB' && e.count === 1));
+});
+
+test('mostNeeded — byCharacter includes only multi-role shows (null character excluded)', () => {
+  const { mostNeeded } = computeCoverageStats([
+    shiftRow({ show: 'GGB', character: null }),
+    shiftRow({ show: 'MFB', character: 'Daphne' }),
+    shiftRow({ show: 'MFB', character: 'Daphne' }),
+    shiftRow({ show: 'MFB', character: 'Houdini' }),
+  ]);
+  const daphne = mostNeeded.byCharacter.find(e => e.character === 'Daphne');
+  assert.equal(daphne.count, 2);
+  assert.equal(daphne.show, 'MFB');
+  assert.equal(mostNeeded.byCharacter[0].character, 'Daphne', 'ranked by count');
+  assert.ok(!mostNeeded.byCharacter.some(e => e.show === 'GGB'), 'single-role show excluded');
+});
+
+test('mostNeeded — groups by weekday, ranked by count', () => {
+  const { mostNeeded } = computeCoverageStats([
+    shiftRow({ id: 1, date: '2026-06-06' }),
+    shiftRow({ id: 2, date: '2026-06-06' }),
+    shiftRow({ id: 3, date: '2026-06-05' }),
+  ]);
+  const NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const topLabel = NAMES[new Date('2026-06-06T00:00:00Z').getUTCDay()];
+  assert.equal(mostNeeded.byWeekday[0].label, topLabel);
+  assert.equal(mostNeeded.byWeekday[0].count, 2);
+});
+
+test('mostNeeded — empty input yields empty dimensions', () => {
+  const { mostNeeded } = computeCoverageStats([]);
+  assert.deepEqual(mostNeeded, { byShow: [], byCharacter: [], byWeekday: [] });
+});
+
+test('buildStatsEmbeds — renders a Most-needed field with show/weekday/character lines', () => {
+  const stats = computeCoverageStats([
+    shiftRow({ id: 1, show: 'MFB', character: 'Daphne', date: '2026-06-06' }),
+    shiftRow({ id: 2, show: 'GGB', date: '2026-06-05' }),
+  ], { now: FIXED_NOW });
+  const field = (buildStatsEmbeds(stats, { resolveName })[0].fields ?? [])
+    .find(f => f.name.includes('Most-needed'));
+  assert.ok(field, 'a Most-needed field should be present');
+  assert.ok(field.value.includes('By show'),      'shows the by-show line');
+  assert.ok(field.value.includes('By weekday'),   'shows the by-weekday line');
+  assert.ok(field.value.includes('By character'), 'shows the by-character line when a multi-role show is present');
+});
+
 // ─── owner gate ───────────────────────────────────────────────────────────────
 
 test('isOwner — allows the owner id and denies everyone else', () => {
