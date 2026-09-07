@@ -12,9 +12,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('coverage-stats')
     .setDescription('Coverage request & cover stats (owner only)')
-    // Hides the command from ordinary members in the UI. The owner-ID check
-    // in execute() is the real gate — admins other than the owner still can't run it.
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    // Hides the command from ordinary members in the UI (matches every other
+    // admin command, which use Manage Server — so the owner reliably sees it
+    // even without the stricter Administrator permission). The owner-ID check
+    // in execute() is the real gate: managers other than the owner can see the
+    // command but are refused when they run it.
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(opt => {
       opt.setName('show')
         .setDescription('Limit to one show (default: all shows)')
