@@ -29,6 +29,7 @@ const {
   buildPickableShifts,
   encodeShiftValue,
   decodeShiftValue,
+  decodeShiftValues,
 } = require('../lib/coverage');
 
 // ─── parseShiftInput ──────────────────────────────────────────────────────────
@@ -606,4 +607,35 @@ test('decodeShiftValue — rejects malformed / tampered values', () => {
   assert.equal(decodeShiftValue('05/04/2026|19:00'), null);
   assert.equal(decodeShiftValue('2026-05-04|7pm'), null);
   assert.equal(decodeShiftValue(null), null);
+});
+
+// ─── decodeShiftValues (multi-shift picker fan-out) ──────────────────────────
+
+test('decodeShiftValues — N selected values produce N correctly-shaped shift inputs', () => {
+  const values = ['2026-05-01|17:30', '2026-05-04|19:00', '2026-05-06|20:00'];
+  const out = decodeShiftValues(values);
+  assert.equal(out.length, 3, 'three selected values → three shift inputs');
+  assert.deepEqual(out, [
+    { date: '2026-05-01', time: '17:30' },
+    { date: '2026-05-04', time: '19:00' },
+    { date: '2026-05-06', time: '20:00' },
+  ]);
+});
+
+test('decodeShiftValues — single selected value behaves like the single-pick path', () => {
+  assert.deepEqual(decodeShiftValues(['2026-05-04|19:00']), [{ date: '2026-05-04', time: '19:00' }]);
+});
+
+test('decodeShiftValues — drops malformed/stale entries, keeps the valid ones', () => {
+  const out = decodeShiftValues(['2026-05-01|17:30', 'garbage', '2026-05-04|19:00']);
+  assert.deepEqual(out, [
+    { date: '2026-05-01', time: '17:30' },
+    { date: '2026-05-04', time: '19:00' },
+  ]);
+});
+
+test('decodeShiftValues — empty or non-array input → empty array', () => {
+  assert.deepEqual(decodeShiftValues([]), []);
+  assert.deepEqual(decodeShiftValues(null), []);
+  assert.deepEqual(decodeShiftValues(undefined), []);
 });

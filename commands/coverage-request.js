@@ -18,7 +18,7 @@ const {
   buildHeaderPost,
   buildShiftPost,
   buildPickableShifts,
-  decodeShiftValue,
+  decodeShiftValues,
 } = require('../lib/coverage');
 const { buildConfirmButton } = require('../lib/confirm');
 const utils = require('../lib/utils');
@@ -47,12 +47,13 @@ function buildCoverageModal(show, character) {
 
 /** The shift-picker select menu for a linked requester's own upcoming shifts. */
 function buildPickerRow(show, character, pickable) {
+  const options = pickable.slice(0, MAX_PICK_OPTIONS);
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`coverage_pick:${show}:${character ?? ''}`)
-    .setPlaceholder('Choose the shift you need covered')
+    .setPlaceholder('Choose the shift(s) you need covered')
     .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(pickable.slice(0, MAX_PICK_OPTIONS).map(s => ({
+    .setMaxValues(options.length) // allow picking any number of the listed shifts
+    .addOptions(options.map(s => ({
       label: s.label,
       description: s.description,
       value: s.value,
@@ -301,9 +302,9 @@ async function handleCoveragePickSelect(interaction) {
   const show      = parts[1];
   const character = parts[2] || null;
 
-  const shifts = interaction.values
-    .map(decodeShiftValue)
-    .filter(Boolean);
+  // Fan the picked values into the shared creation path — N selected shifts
+  // become N shift inputs, identical to selecting them one at a time.
+  const shifts = decodeShiftValues(interaction.values);
 
   if (!shifts.length) {
     await interaction.editReply({
