@@ -12,7 +12,7 @@ const {
 const db = require('../lib/db');
 const members = require('../lib/members');
 const bookeo = require('../lib/bookeo');
-const { SHOW_CHOICES, showLabel, showCharacters } = require('../lib/shows');
+const { SHOW_CHOICES, showLabel, showCharacters, getShowRole } = require('../lib/shows');
 const {
   parseShiftInput,
   buildHeaderPost,
@@ -25,6 +25,9 @@ const utils = require('../lib/utils');
 
 // Max options in a Discord string select menu.
 const MAX_PICK_OPTIONS = 25;
+
+// How far out the shift picker looks for a linked requester's upcoming shifts.
+const PICKER_HORIZON_DAYS = 90;
 
 // ─── Component builders ───────────────────────────────────────────────────────
 
@@ -84,7 +87,7 @@ module.exports = {
     )
     .addStringOption(opt =>
       opt.setName('character')
-        .setDescription('Your character (required for MFB and The Endings)')
+        .setDescription('Your character — auto-detected from your Discord role for MFB/Endings if omitted')
         .setRequired(false)
         .setAutocomplete(true)
     ),
@@ -100,11 +103,23 @@ module.exports = {
   },
 
   async execute(interaction) {
-    const show      = interaction.options.getString('show');
-    const character = interaction.options.getString('character');
-    const chars     = showCharacters(show);
+    const show  = interaction.options.getString('show');
+    let character = interaction.options.getString('character');
+    const chars = showCharacters(show);
 
     if (chars) {
+      if (!character) {
+        // No explicit character — try to detect it from the requester's Discord role
+        // (the same role lookup MFB/Endings fill-detection already relies on). Only
+        // act on it when it resolves to exactly one character; a missing role or a
+        // "Daphne/Houdini"-style combo (both roles) is ambiguous, so fall through to
+        // asking them to specify.
+        const detected = await getShowRole(interaction.guild, interaction.user.id, show);
+        if (detected && chars.includes(detected)) {
+          character = detected;
+        }
+      }
+
       if (!character) {
         return interaction.reply({
           content: `❌ **${showLabel(show)}** has multiple characters (${chars.join(', ')}). Please specify your character.`,
@@ -139,12 +154,10 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const startDate = utils.todayCentral();
-    const [y, mo, d] = startDate.split('-').map(Number);
-    const endDate = utils.toDateString(new Date(y, mo - 1, d + 7));
 
     let scheduleRows;
     try {
-      scheduleRows = await bookeo.getSchedule(startDate, endDate);
+      scheduleRows = await bookeo.getScheduleForDays(startDate, PICKER_HORIZON_DAYS);
     } catch (err) {
       await interaction.editReply({
         content:
@@ -161,7 +174,7 @@ module.exports = {
       await interaction.editReply({
         content:
           `I couldn't find any upcoming **${showLabel(show)}** shifts for **${link.bookeo_name}** ` +
-          `in the next 7 days on Bookeo. If your shift isn't scheduled there yet (a one-off, or ` +
+          `in the next ${PICKER_HORIZON_DAYS} days on Bookeo. If your shift isn't scheduled there yet (a one-off, or ` +
           `you're not listed in the cast), enter it manually below.`,
         components: [buildManualButtonRow(show, character)],
       });
