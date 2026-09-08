@@ -13,7 +13,7 @@ const assert = require('node:assert/strict');
 
 process.env.DB_PATH = ':memory:';
 
-const { planExpiredMeetings, planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions, planLatebookingChecks, findNewlyBooked } = require('../lib/scheduler');
+const { planExpiredMeetings, planMeetingReminders, planShiftDMs, planCustomGameReminders, planNonResponderMentions, planLatebookingChecks, findNewlyBooked, nextCronFire, buildJobScheduleView, JOB_META } = require('../lib/scheduler');
 const checkin = require('../lib/checkin');
 
 // ─── planMeetingReminders ─────────────────────────────────────────────────────
@@ -453,4 +453,69 @@ test('findNewlyBooked — returns only newly-booked, not still-blank', () => {
   const result = findNewlyBooked(baseline, current);
   assert.equal(result.length, 1);
   assert.equal(result[0].time, '7:00 PM');
+});
+
+// ─── nextCronFire / buildJobScheduleView (schedule view for /bot-status) ──────
+
+// Fixed reference: Friday, May 1 2026, 12:00 noon Central (CDT, UTC-5).
+const _CRON_NOW = new Date('2026-05-01T12:00:00-05:00');
+
+function _centralParts(ms) {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', weekday: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(ms));
+  const get = t => p.find(x => x.type === t).value;
+  return { weekday: get('weekday'), hour: get('hour') === '24' ? '00' : get('hour'), minute: get('minute') };
+}
+function _centralDate(ms) {
+  return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+}
+
+test('nextCronFire — daily 8am after noon rolls to tomorrow at 8:00 Central', () => {
+  const fire = nextCronFire('0 8 * * *', _CRON_NOW);
+  assert.ok(fire > _CRON_NOW.getTime(), 'must be in the future');
+  assert.equal(_centralDate(fire), '2026-05-02', 'rolls to tomorrow (8am already passed today)');
+  assert.deepEqual(_centralParts(fire), { weekday: 'Sat', hour: '08', minute: '00' });
+});
+
+test('nextCronFire — daily 9pm is still today when now is noon', () => {
+  const fire = nextCronFire('0 21 * * *', _CRON_NOW);
+  assert.equal(_centralDate(fire), '2026-05-01', 'still today');
+  assert.deepEqual(_centralParts(fire), { weekday: 'Fri', hour: '21', minute: '00' });
+});
+
+test('nextCronFire — weekly Sunday 8am lands on the next Sunday', () => {
+  const fire = nextCronFire('0 8 * * 0', _CRON_NOW);
+  const parts = _centralParts(fire);
+  assert.equal(parts.weekday, 'Sun');
+  assert.equal(parts.hour, '08');
+  assert.equal(parts.minute, '00');
+});
+
+test('nextCronFire — midnight 12:05am handled (hour 0)', () => {
+  const fire = nextCronFire('5 0 * * *', _CRON_NOW);
+  assert.equal(_centralDate(fire), '2026-05-02');
+  assert.deepEqual(_centralParts(fire), { weekday: 'Sat', hour: '00', minute: '05' });
+});
+
+test('nextCronFire — unparseable expression returns null', () => {
+  assert.equal(nextCronFire('not a cron', _CRON_NOW), null);
+  assert.equal(nextCronFire('', _CRON_NOW), null);
+});
+
+test('buildJobScheduleView — one entry per JOB_META job, each with a future nextRun', () => {
+  const view = buildJobScheduleView(_CRON_NOW);
+  assert.equal(view.length, Object.keys(JOB_META).length);
+  for (const row of view) {
+    assert.ok(row.key && row.label, 'has key + label');
+    assert.ok(typeof row.nextRun === 'number' && row.nextRun > _CRON_NOW.getTime(), `${row.key} nextRun is future`);
+  }
+});
+
+test('buildJobScheduleView — multi-slot job (check-in seed) reports the sooner slot', () => {
+  const view = buildJobScheduleView(_CRON_NOW);
+  const seed = view.find(r => r.key === 'checkin-seed');
+  // midnight 12:05am (May 2) is sooner than the 8am backup slot (May 2)
+  assert.deepEqual(_centralParts(seed.nextRun), { weekday: 'Sat', hour: '00', minute: '05' });
 });
