@@ -19,6 +19,7 @@ const utils   = require('./lib/utils');
 const { handleCoverageRequestModal, handleCoveragePickSelect, handleCoverageManualButton } = require('./commands/coverage-request');
 const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit, handleCovCancelButton } = require('./lib/confirm');
 const { openDMChannels } = require('./lib/dm-channels');
+const errorBuffer = require('./lib/error-buffer');
 const fs   = require('fs');
 const path = require('path');
 
@@ -126,6 +127,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     await handleReactionChange(client, reaction, user, 'add');
   } catch (err) {
     console.error('[rsvp] Unhandled error on reaction add:', err);
+    errorBuffer.push(err, 'reaction:add');
   }
 });
 
@@ -134,6 +136,7 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
     await handleReactionChange(client, reaction, user, 'remove');
   } catch (err) {
     console.error('[rsvp] Unhandled error on reaction remove:', err);
+    errorBuffer.push(err, 'reaction:remove');
   }
 });
 
@@ -285,6 +288,7 @@ client.on(Events.InteractionCreate, async interaction => {
     await command.execute(interaction);
   } catch (err) {
     console.error(`[error] /${interaction.commandName}:`, err);
+    errorBuffer.push(err, `command:/${interaction.commandName}`);
     const payload = { content: 'Something went wrong. Check the logs.', ephemeral: true };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(payload);
@@ -313,6 +317,7 @@ process.on('SIGINT', () => {
 
 process.on('unhandledRejection', (err) => {
   console.error('[unhandledRejection]', err);
+  errorBuffer.push(err, 'unhandledRejection');
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────

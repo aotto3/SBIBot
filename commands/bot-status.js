@@ -4,6 +4,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('disc
 const bookeo    = require('../lib/bookeo');
 const scheduler = require('../lib/scheduler');
 const jobRuns   = require('../lib/job-runs');
+const errorBuffer = require('../lib/error-buffer');
 const utils     = require('../lib/utils');
 const { isOwner } = require('../lib/owner');
 const { buildStatusEmbed } = require('../lib/bot-status');
@@ -73,6 +74,7 @@ module.exports = {
         bookeo:    bookeoState,
       },
       jobs,
+      errors: errorBuffer.list(),
     };
 
     return interaction.editReply({ embeds: [buildStatusEmbed(snapshot, { now })] });

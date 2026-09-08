@@ -148,6 +148,59 @@ test('buildStatusEmbed — a never-run job (lastRun null) renders "no runs recor
   assert.ok(lastRun.value.includes('Weekly maybe-nudge'), 'lists the never-run job by label');
 });
 
+// ─── buildStatusEmbed — recent errors (slice #159) ───────────────────────────
+
+test('buildStatusEmbed — empty error feed renders cleanly', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+    errors: [],
+  }, { now: NOW });
+  const errs = field(embed, 'Recent errors');
+  assert.ok(errs, 'error field present even when empty');
+  assert.ok(/no recent errors/i.test(errs.value));
+});
+
+test('buildStatusEmbed — populated error feed lists entries newest-first with context', () => {
+  const t1 = NOW - 5000, t2 = NOW - 1000;
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+    errors: [
+      { at: t2, context: 'job:coverage-pings', message: 'rate limited' },
+      { at: t1, context: 'unhandledRejection', message: 'undefined is not a function' },
+    ],
+  }, { now: NOW });
+
+  const errs = field(embed, 'Recent errors');
+  assert.ok(errs.value.includes('rate limited'), 'includes first message');
+  assert.ok(errs.value.includes('coverage-pings'), 'includes context tag');
+  assert.ok(errs.value.includes(`<t:${Math.floor(t2 / 1000)}:R>`), 'renders timestamp');
+  assert.ok(errs.value.indexOf('rate limited') < errs.value.indexOf('undefined is not a function'),
+    'newest entry rendered first (caller passes newest-first)');
+});
+
+test('buildStatusEmbed — error feed caps at 5 with an overflow note', () => {
+  const errors = Array.from({ length: 8 }, (_, i) => ({ at: NOW - i * 1000, context: 'x', message: `e${i}` }));
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+    errors,
+  }, { now: NOW });
+  const errs = field(embed, 'Recent errors');
+  assert.ok(/and 3 more/i.test(errs.value), 'notes the 3 not shown');
+  assert.ok(errs.value.includes('e0') && errs.value.includes('e4'), 'shows the first 5');
+  assert.ok(!errs.value.includes('e5'), 'omits beyond the cap');
+});
+
+test('buildStatusEmbed — no errors key → no error field (skeleton compatibility)', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+  }, { now: NOW });
+  assert.ok(!field(embed, 'Recent errors'), 'omitted when snapshot has no errors key');
+});
+
 test('buildStatusEmbed — no jobs → only the health field, no schedule/last-run', () => {
   const embed = buildStatusEmbed({
     health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
