@@ -77,8 +77,9 @@ module.exports = {
       return interaction.editReply(`No shifts found between \`${startDate}\` and \`${endDate}\`.`);
     }
 
-    // Filter to the requested date range — the bookeo-asst API ignores the `to`
-    // parameter and always returns a full week. We enforce the window ourselves.
+    // Enforce the requested date range ourselves. The range is scoped upstream
+    // via start/end, but bookeo-asst is a third-party dependency, so we don't
+    // trust its scoping blindly.
     shifts = shifts.filter(s => s.date >= startDate && s.date <= endDate);
     console.log(`[send-shift-reminders] after date filter: ${shifts.length} shift(s) in range`);
 
