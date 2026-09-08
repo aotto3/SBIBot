@@ -26,6 +26,9 @@ const {
   planMissingRolePings,
   planShiftCancel,
   analyzeCoverage,
+  buildPickableShifts,
+  encodeShiftValue,
+  decodeShiftValue,
 } = require('../lib/coverage');
 
 // ─── parseShiftInput ──────────────────────────────────────────────────────────
@@ -537,4 +540,70 @@ test('buildAllRespondedDM — multi-role exhaustedRoles renders both role names'
   assert.ok(dm.includes('Daphne'), 'should include Daphne');
   assert.ok(dm.includes('Houdini'), 'should include Houdini');
   assert.ok(!dm.includes('the **Daphne** role\n'), 'should not use singular phrasing for multi-role');
+});
+
+// ─── buildPickableShifts / shift-value codec (shift picker) ──────────────────
+
+const _NOW = new Date('2026-05-01T12:00:00-05:00'); // Central (CDT): 2026-05-01 12:00
+
+function _schedule() {
+  return [
+    { date: '2026-05-04', time: '7:00 PM', show: 'MFB', cast: ['Allen Otto', 'Bob'], guest_count: 0 }, // future, 0-guest
+    { date: '2026-05-01', time: '5:30pm',  show: 'MFB', cast: ['Allen Otto'],        guest_count: 3 }, // today, after now
+    { date: '2026-05-01', time: '9:00 AM', show: 'MFB', cast: ['Allen Otto'],        guest_count: 2 }, // today, past (before now)
+    { date: '2026-05-05', time: '19:00',   show: 'MFB', cast: ['Bob'],               guest_count: 4 }, // not Allen
+    { date: '2026-04-30', time: '19:00',   show: 'MFB', cast: ['Allen Otto'],        guest_count: 1 }, // past date
+    { date: '2026-05-06', time: '19:00',   show: 'GGB', cast: ['Allen Otto'],        guest_count: 0 }, // other show
+    { date: '2026-05-04', time: '7:00 PM', show: 'MFB', cast: ['Allen Otto'],        guest_count: 0 }, // dup of first
+  ];
+}
+
+test('buildPickableShifts — filters to member+show, includes 0-guest, drops past, sorts, dedupes', () => {
+  const out = buildPickableShifts(_schedule(), 'Allen Otto', { now: _NOW, show: 'MFB' });
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.map(s => `${s.date} ${s.time}`), ['2026-05-01 17:30', '2026-05-04 19:00']);
+  assert.equal(out[1].time, '19:00', 'Bookeo "7:00 PM" normalized to canonical HH:MM');
+  assert.equal(out[1].guestCount, 0, '0-guest shows are included');
+});
+
+test('buildPickableShifts — case-insensitive name match', () => {
+  assert.equal(buildPickableShifts(_schedule(), 'allen OTTO', { now: _NOW, show: 'MFB' }).length, 2);
+});
+
+test('buildPickableShifts — no show filter spans all shows', () => {
+  const out = buildPickableShifts(_schedule(), 'Allen Otto', { now: _NOW });
+  assert.equal(out.length, 3);
+  assert.ok(out.some(s => s.show === 'GGB'));
+});
+
+test('buildPickableShifts — member with no shifts → empty', () => {
+  assert.deepEqual(buildPickableShifts(_schedule(), 'Nobody', { now: _NOW }), []);
+});
+
+test('buildPickableShifts — guards bad input', () => {
+  assert.deepEqual(buildPickableShifts(null, 'Allen Otto', { now: _NOW }), []);
+  assert.deepEqual(buildPickableShifts(_schedule(), '', { now: _NOW }), []);
+});
+
+test('buildPickableShifts — label, value, and description shape', () => {
+  const out = buildPickableShifts(_schedule(), 'Allen Otto', { now: _NOW, show: 'MFB' });
+  const s = out[1]; // 2026-05-04 19:00
+  assert.equal(s.value, '2026-05-04|19:00');
+  assert.equal(s.label, 'Mon, May 4 · 7:00 PM');
+  assert.equal(s.description, '0 guests booked');
+});
+
+test('encode/decodeShiftValue — round-trip', () => {
+  const v = encodeShiftValue('2026-05-04', '19:00');
+  assert.equal(v, '2026-05-04|19:00');
+  assert.deepEqual(decodeShiftValue(v), { date: '2026-05-04', time: '19:00' });
+});
+
+test('decodeShiftValue — rejects malformed / tampered values', () => {
+  assert.equal(decodeShiftValue('garbage'), null);
+  assert.equal(decodeShiftValue('2026-05-04'), null);
+  assert.equal(decodeShiftValue('2026-05-04|19:00|extra'), null);
+  assert.equal(decodeShiftValue('05/04/2026|19:00'), null);
+  assert.equal(decodeShiftValue('2026-05-04|7pm'), null);
+  assert.equal(decodeShiftValue(null), null);
 });

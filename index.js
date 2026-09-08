@@ -16,7 +16,7 @@ const db      = require('./lib/db');
 const checkin = require('./lib/checkin');
 const { showLabel } = require('./lib/shows');
 const utils   = require('./lib/utils');
-const { handleCoverageRequestModal } = require('./commands/coverage-request');
+const { handleCoverageRequestModal, handleCoveragePickSelect, handleCoverageManualButton } = require('./commands/coverage-request');
 const { handleConfirmCoverageButton, handleConfirmCoverageSelect, handleMultiRoleSelect, handleMultiRoleSubmit, handleCovCancelButton } = require('./lib/confirm');
 const { openDMChannels } = require('./lib/dm-channels');
 const fs   = require('fs');
@@ -243,6 +243,18 @@ client.on(Events.InteractionCreate, async interaction => {
   // Cancel button from /open-coverage
   if (interaction.isButton() && interaction.customId.startsWith('cov_cancel:')) {
     try { await handleCovCancelButton(interaction); } catch (err) { console.error('[confirm] Cancel button error:', err); }
+    return;
+  }
+
+  // Coverage request shift-picker select (from /coverage-request)
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('coverage_pick:')) {
+    try { await handleCoveragePickSelect(interaction); } catch (err) { console.error('[coverage] Pick handler error:', err); }
+    return;
+  }
+
+  // Coverage request "enter manually" button
+  if (interaction.isButton() && interaction.customId.startsWith('coverage_manual:')) {
+    try { await handleCoverageManualButton(interaction); } catch (err) { console.error('[coverage] Manual button error:', err); }
     return;
   }
 
