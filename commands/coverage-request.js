@@ -119,12 +119,18 @@ module.exports = {
       }
     }
 
-    // Unlinked requesters can't have their shifts looked up — go straight to the
-    // manual modal (unchanged behavior). The link lookup is synchronous, so this
-    // stays within Discord's 3s initial-response window (no defer before showModal).
+    // Unlinked requesters have no Bookeo cast name to look shifts up by, so the
+    // picker can't help them. Explain why and offer the manual modal via a button.
+    // (A reply can't be followed by showModal, so we hand off through the button.)
     const link = db.getMemberByDiscordId(interaction.user.id);
     if (!link) {
-      return interaction.showModal(buildCoverageModal(show, character));
+      return interaction.reply({
+        content:
+          `ℹ️ Your Discord account isn't linked to a Bookeo cast name yet, so I can't ` +
+          `look up your shifts automatically. Enter the shift details manually instead.`,
+        components: [buildManualButtonRow(show, character)],
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     // Linked: fetch their upcoming shifts and offer a picker. Deferring buys time
@@ -141,7 +147,9 @@ module.exports = {
       scheduleRows = await bookeo.getSchedule(startDate, endDate);
     } catch (err) {
       await interaction.editReply({
-        content: `⚠️ Couldn't reach Bookeo to load your shifts (${err.message}). You can still enter the shift manually.`,
+        content:
+          `⚠️ I couldn't reach Bookeo to load your shifts (${err.message}), so I can't ` +
+          `show your schedule to pick from right now. You can still enter the shift manually below.`,
         components: [buildManualButtonRow(show, character)],
       });
       return;
@@ -151,15 +159,22 @@ module.exports = {
 
     if (!pickable.length) {
       await interaction.editReply({
-        content: `No upcoming **${showLabel(show)}** shifts found for **${link.bookeo_name}** in the next 7 days. If your shift isn't on Bookeo yet, enter it manually.`,
+        content:
+          `I couldn't find any upcoming **${showLabel(show)}** shifts for **${link.bookeo_name}** ` +
+          `in the next 7 days on Bookeo. If your shift isn't scheduled there yet (a one-off, or ` +
+          `you're not listed in the cast), enter it manually below.`,
         components: [buildManualButtonRow(show, character)],
       });
       return;
     }
 
+    // Populated picker: offer the select *and* a manual escape hatch for a shift
+    // Bookeo doesn't know about (unscheduled, one-off, or requester not in cast).
     await interaction.editReply({
-      content: `📋 Pick the **${showLabel(show)}**${character ? ` (${character})` : ''} shift you need covered:`,
-      components: [buildPickerRow(show, character, pickable)],
+      content:
+        `📋 Pick the **${showLabel(show)}**${character ? ` (${character})` : ''} shift(s) you need ` +
+        `covered — or use **Enter shift manually** if the one you need isn't listed:`,
+      components: [buildPickerRow(show, character, pickable), buildManualButtonRow(show, character)],
     });
   },
 };
