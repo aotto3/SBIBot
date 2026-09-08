@@ -5,9 +5,12 @@ const bookeo    = require('../lib/bookeo');
 const scheduler = require('../lib/scheduler');
 const jobRuns   = require('../lib/job-runs');
 const errorBuffer = require('../lib/error-buffer');
+const repo      = require('../lib/coverage-repository');
+const members   = require('../lib/members');
+const checkin   = require('../lib/checkin');
 const utils     = require('../lib/utils');
 const { isOwner } = require('../lib/owner');
-const { buildStatusEmbed } = require('../lib/bot-status');
+const { buildStatusEmbed, partitionCastLinks } = require('../lib/bot-status');
 
 /** Map the Discord client's connection state to the snapshot's discord field. */
 function discordState(client) {
@@ -47,6 +50,20 @@ module.exports = {
       bookeoState = 'unreachable';
     }
 
+    // Today's schedule (for the unlinked-cast count). probeReachability primed
+    // the cache above, so this is a cache hit unless Bookeo is unreachable.
+    let todaySchedule = null;
+    if (bookeoState !== 'unreachable') {
+      try { todaySchedule = await bookeo.getSchedule(today, today); } catch { todaySchedule = null; }
+    }
+
+    let unlinkedCast = null; // null → unknown (Bookeo unreachable)
+    if (Array.isArray(todaySchedule)) {
+      const castToday    = todaySchedule.filter(s => s.date === today).flatMap(s => (Array.isArray(s.cast) ? s.cast : []));
+      const linkedNames  = members.getAllLinkedMembers().map(m => m.bookeoName);
+      unlinkedCast = partitionCastLinks(castToday, linkedNames).unlinked.length;
+    }
+
     // Merge next-fire (schedule) with last-run (instrumentation), keyed by job.
     // lastRun is null (not undefined) for a job that has never run, so the embed
     // renders "no runs recorded" rather than omitting the section.
@@ -74,6 +91,13 @@ module.exports = {
         bookeo:    bookeoState,
       },
       jobs,
+      counts: {
+        openShifts:      repo.getOpenShifts().length,
+        openGames:       repo.getOpenGames().length,
+        unconfirmed:     repo.getUnconfirmedShifts().length + repo.getUnconfirmedGames().length,
+        pendingCheckins: checkin.countPendingCheckinsToday(today),
+        unlinkedCast,
+      },
       errors: errorBuffer.list(),
     };
 

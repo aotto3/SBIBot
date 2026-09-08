@@ -12,7 +12,7 @@
 const test   = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildStatusEmbed, _fmtUptime, _fmtDuration } = require('../lib/bot-status');
+const { buildStatusEmbed, partitionCastLinks, _fmtUptime, _fmtDuration } = require('../lib/bot-status');
 
 const NOW = Date.parse('2026-05-01T12:00:00-05:00');
 
@@ -146,6 +146,79 @@ test('buildStatusEmbed — a never-run job (lastRun null) renders "no runs recor
   const lastRun = field(embed, 'Last run');
   assert.ok(/no runs recorded/i.test(lastRun.value), 'never-run job shown clearly');
   assert.ok(lastRun.value.includes('Weekly maybe-nudge'), 'lists the never-run job by label');
+});
+
+// ─── partitionCastLinks (slice #160) ─────────────────────────────────────────
+
+test('partitionCastLinks — splits linked vs unlinked case-insensitively', () => {
+  const { linked, unlinked } = partitionCastLinks(
+    ['Allen Otto', 'jane smith', 'New Person'],
+    ['allen otto', 'Jane Smith'],
+  );
+  assert.deepEqual(linked, ['Allen Otto', 'jane smith']);
+  assert.deepEqual(unlinked, ['New Person']);
+});
+
+test('partitionCastLinks — de-dupes cast names case-insensitively', () => {
+  const { unlinked } = partitionCastLinks(['Sam', 'sam', 'SAM'], []);
+  assert.deepEqual(unlinked, ['Sam'], 'one entry, first casing kept');
+});
+
+test('partitionCastLinks — everyone linked → empty unlinked list', () => {
+  const { unlinked } = partitionCastLinks(['Alice', 'Bob'], ['alice', 'bob']);
+  assert.deepEqual(unlinked, []);
+});
+
+test('partitionCastLinks — guards bad input and blank/whitespace names', () => {
+  assert.deepEqual(partitionCastLinks(null, ['a']), { linked: [], unlinked: [] });
+  const { unlinked } = partitionCastLinks(['  ', 'Real', null, 42], null);
+  assert.deepEqual(unlinked, ['Real']);
+});
+
+// ─── buildStatusEmbed — data counts (slice #160) ─────────────────────────────
+
+test('buildStatusEmbed — data counts render each metric', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+    counts: { openShifts: 3, openGames: 1, unconfirmed: 2, pendingCheckins: 4, unlinkedCast: 2 },
+  }, { now: NOW });
+  const data = field(embed, 'Data at a glance');
+  assert.ok(data, 'has a data field');
+  assert.ok(data.value.includes('Open coverage shifts: **3**'));
+  assert.ok(data.value.includes('Open custom games: **1**'));
+  assert.ok(data.value.includes('Unconfirmed (ready to fill): **2**'));
+  assert.ok(data.value.includes('Pending check-ins today: **4**'));
+  assert.ok(data.value.includes('Unlinked cast today: **2**'));
+});
+
+test('buildStatusEmbed — zero states render cleanly (all-linked, zero counts)', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+    counts: { openShifts: 0, openGames: 0, unconfirmed: 0, pendingCheckins: 0, unlinkedCast: 0 },
+  }, { now: NOW });
+  const data = field(embed, 'Data at a glance');
+  assert.ok(data.value.includes('Open coverage shifts: **0**'));
+  assert.ok(/all cast linked/i.test(data.value), 'zero unlinked → all cast linked');
+});
+
+test('buildStatusEmbed — unknown unlinked count (Bookeo unreachable) renders "unknown"', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'unreachable' },
+    jobs: [],
+    counts: { openShifts: 1, openGames: 0, unconfirmed: 0, pendingCheckins: 0, unlinkedCast: null },
+  }, { now: NOW });
+  const data = field(embed, 'Data at a glance');
+  assert.ok(/unlinked cast today: _unknown_/i.test(data.value));
+});
+
+test('buildStatusEmbed — no counts key → no data field', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [],
+  }, { now: NOW });
+  assert.ok(!field(embed, 'Data at a glance'));
 });
 
 // ─── buildStatusEmbed — recent errors (slice #159) ───────────────────────────
