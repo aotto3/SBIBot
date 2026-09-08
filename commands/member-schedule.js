@@ -4,6 +4,32 @@ const utils  = require('../lib/utils');
 const bookeo = require('../lib/bookeo');
 const { showLabel } = require('../lib/shows');
 
+// How far out to look. A fixed horizon fetched unconditionally — no early-stop
+// on empty weeks, since a real multi-week dark spell between shows is common
+// here and would otherwise cause a booking past the gap to be silently missed.
+const SCHEDULE_HORIZON_DAYS = 90;
+const DISCORD_CONTENT_LIMIT = 2000;
+
+/** Join shift lines into the reply, clamping to Discord's content limit with an "…and N more" tail. */
+function _clampLines(lines, limit = DISCORD_CONTENT_LIMIT) {
+  const full = lines.join('\n');
+  if (full.length <= limit) return full;
+
+  const kept = [];
+  let len = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const moreLine = `…and ${lines.length - i} more`;
+    const sep = kept.length ? 1 : 0;
+    if (len + sep + lines[i].length + 1 + moreLine.length > limit) {
+      kept.push(moreLine);
+      return kept.join('\n');
+    }
+    len += sep + lines[i].length;
+    kept.push(lines[i]);
+  }
+  return kept.join('\n');
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('member-schedule')
@@ -17,11 +43,6 @@ module.exports = {
       opt.setName('discord')
         .setDescription('Or pick by linked Discord user')
         .setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt.setName('week_of')
-        .setDescription('Start date — defaults to today (e.g. May 14, 5/14/2026)')
-        .setRequired(false)
     ),
 
   async execute(interaction) {
@@ -29,7 +50,6 @@ module.exports = {
 
     const nameOpt    = interaction.options.getString('name');
     const discordOpt = interaction.options.getUser('discord');
-    const weekOfStr  = interaction.options.getString('week_of');
 
     // Resolve the cast name
     let castName;
@@ -45,38 +65,27 @@ module.exports = {
       return interaction.editReply('Provide either a `name` or a `discord` user.');
     }
 
-    // Resolve date range
-    let startDate;
-    if (weekOfStr) {
-      startDate = utils.parseDate(weekOfStr);
-      if (!startDate) {
-        return interaction.editReply(`Couldn't parse date \`${weekOfStr}\`. Try: \`May 14\`, \`5/14/2026\`, \`2026-05-14\``);
-      }
-    } else {
-      startDate = utils.todayCentral();
-    }
+    const startDate = utils.todayCentral();
 
-    const [y, mo, d] = startDate.split('-').map(Number);
-    const endDate = utils.toDateString(new Date(y, mo - 1, d + 7));
-
-    let shifts;
+    let scheduleRows;
     try {
-      shifts = await bookeo.getSchedule(startDate, endDate);
+      scheduleRows = await bookeo.getScheduleForDays(startDate, SCHEDULE_HORIZON_DAYS);
     } catch (err) {
       return interaction.editReply(`Couldn't fetch schedule from Bookeo: ${err.message}\n_Is the bookeo-asst API endpoint live?_`);
     }
 
-    // Filter to this cast member (case-insensitive)
-    const memberShifts = shifts.filter(s =>
-      s.cast.some(c => c.toLowerCase() === castName.toLowerCase())
-    );
+    const memberShifts = scheduleRows
+      .filter(s => s.cast.some(c => c.toLowerCase() === castName.toLowerCase()))
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (utils.parseTime(a.time) ?? '').localeCompare(utils.parseTime(b.time) ?? '');
+      });
 
     if (!memberShifts.length) {
-      return interaction.editReply(`No shifts found for **${castName}** between ${startDate} and ${endDate}.`);
+      return interaction.editReply(`No upcoming shifts found for **${castName}** in the next ${SCHEDULE_HORIZON_DAYS} days.`);
     }
 
-    const [sy, smo, sd] = startDate.split('-').map(Number);
-    const lines = [`📅 **${castName}'s schedule: ${utils.formatMeetingDate(new Date(sy, smo - 1, sd))} – next 7 days**\n`];
+    const lines = [`📅 **${castName}'s upcoming schedule**\n`];
 
     for (const shift of memberShifts) {
       const [dy, dmo, dd] = shift.date.split('-').map(Number);
@@ -85,6 +94,6 @@ module.exports = {
       lines.push(`  • ${showName} — ${dateDisplay} at ${shift.time} (${shift.guest_count} guests)`);
     }
 
-    await interaction.editReply(lines.join('\n'));
+    await interaction.editReply(_clampLines(lines));
   },
 };
