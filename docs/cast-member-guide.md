@@ -77,7 +77,7 @@ The bot's reply is private (only you can see it).
 
 ## 3. Viewing Your Schedule
 
-Use `/member-schedule` to see upcoming shifts.
+Use `/member-schedule` to see a cast member's full upcoming schedule (up to 90 days out) in one reply — no need to pick a week.
 
 **How to use it:**
 
@@ -87,7 +87,6 @@ Type `/member-schedule` and fill in the options:
 |---|---|---|
 | `name` | One of these two | First name as it appears in Bookeo (e.g. `DeShae`) |
 | `discord` | One of these two | @mention a linked cast member instead |
-| `week_of` | No | Start date to look from — defaults to today |
 
 You must provide either `name` or `discord`, but not both.
 
@@ -96,7 +95,7 @@ You must provide either `name` or `discord`, but not both.
 
 **What you'll see:**
 ```
-📅 Allen's schedule: Thursday, May 14 – next 7 days
+📅 Allen's upcoming schedule
 
   • Great Gold Bird — Thursday, May 14 at 7:00 PM (8 guests)
   • The Endings — Saturday, May 16 at 5:30 PM (12 guests)
@@ -130,19 +129,21 @@ Use `/coverage-request` when you need someone to cover one or more of your shift
 | Option | Required? | Description |
 |---|---|---|
 | `show` | Yes | Which show you need coverage for |
-| `character` | For MFB and The Endings | Your character name |
+| `character` | Usually not needed | Your character — the bot detects it from your Discord role for MFB/Endings; only fill this in if it asks |
 
-2. Hit Enter. A form (modal) will pop up asking for your shift dates and times — enter one per line:
-```
-5/1/2026 at 7pm
-5/2/2026 at 5:30pm
-```
+2. Hit Enter.
+   - **If your Discord account is linked** (ask an admin to run `/link-member` if you're not sure): the bot shows a list of your own upcoming shifts for that show. Check off any number of them and submit — no typing required.
+   - **If you're not linked, or the shift you need isn't in the list** (a one-off, or not yet in Bookeo): click **Enter shift manually**. A form pops up asking for your shift dates and times — enter one per line:
+     ```
+     5/1/2026 at 7pm
+     5/2/2026 at 5:30pm
+     ```
 
-3. Submit the form. The bot posts your request to the coverage channel.
+3. Submit. The bot posts your request to the coverage channel — same result either way.
 
 **About the character option (MFB and The Endings):**
 
-These shows have two actors per show, each with their own coverage channel. You must select your character when submitting — otherwise the bot won't know where to post. For MFB, choose `Daphne` or `Houdini`. For The Endings, choose `HR` or `Author`. For GGB and Lucidity, no character selection is needed.
+These shows have two actors per show, each with their own coverage channel. The bot normally figures out which one you are from your Discord role (Daphne/Houdini for MFB, HR/Author for The Endings), so you usually don't need to touch this option. It'll only ask you to pick if it can't tell — for example your role isn't set, or you hold both roles. For GGB and Lucidity, no character selection is ever needed.
 
 **What gets posted:**
 

@@ -83,12 +83,12 @@ Show who responded to a meeting's RSVP — attending, not attending, maybe, and 
 ## Coverage Requests
 
 ### `/coverage-request` 👥
-Request coverage for one or more of your own shifts. Opens a form where you enter the shift date(s) and time(s); the bot posts a coverage request (with a **Confirm Coverage** button) to the show's coverage channel and collects ✅ / ❌ / ❓ reactions from eligible cast.
+Request coverage for one or more of your own shifts. If your Discord account is linked (`/link-member`), the bot shows a picker of your own upcoming Bookeo shifts for the chosen show — check off any number and submit. Not linked, or need a shift Bookeo doesn't know about? An **Enter shift manually** button opens a form to type the date(s)/time(s) instead. Either way, the bot posts a coverage request (with a **Confirm Coverage** button) to the show's coverage channel and collects ✅ / ❌ / ❓ reactions from eligible cast.
 
 | Option | Required | Notes |
 |---|---|---|
 | `show` | ✅ | MFB · The Endings · GGB · Lucidity |
-| `character` | required for MFB & The Endings | Your character (Daphne/Houdini, HR/Author) |
+| `character` | needed for MFB & The Endings | Your character (Daphne/Houdini, HR/Author) — auto-detected from your Discord role if omitted |
 
 ### `/cancel-coverage-request` 👥
 Cancel a single shift from one of your coverage requests. Edits the post to a cancelled state (never silently deletes).
@@ -171,13 +171,12 @@ Show the full show schedule for the coming week, pulled from Bookeo.
 | `week_of` | optional | Defaults to today |
 
 ### `/member-schedule` 👥
-Show one cast member's upcoming shifts for the next 7 days.
+Show one cast member's full upcoming schedule (up to 90 days out) in a single reply.
 
 | Option | Required | Notes |
 |---|---|---|
 | `name` | one of these | First name as it appears in Bookeo |
 | `discord` | one of these | @mention a linked cast member |
-| `week_of` | optional | Defaults to today |
 
 ### `/send-shift-reminders` 🔒
 Send shift DMs manually — or preview what would be sent to one person without sending. (Normally automatic: weekly on Mondays and daily, both at 8:48am CT.)
@@ -310,6 +309,9 @@ Re-run a scheduled job on demand (no redeploy) and get a sent/failed/skipped rep
 
 > **Failure notifications:** if any scheduled job throws, or finishes but silently drops items (e.g. "sent 1 of 11"), the bot sends one summary — a DM to the ops contact **and** a post to the error channel. `/rerun-job` is the recovery tool.
 
+### `/bot-status` 👑
+A live snapshot of bot health, schedule, and recent activity — **owner only**. Ephemeral. Shows: uptime + Discord/Bookeo connection health, every scheduled job's next run time and last-run result (✅/🔴 + duration), open/unconfirmed coverage counts, today's pending check-ins, how many of today's cast are unlinked, and the last few recent errors.
+
 ---
 
 ## Help
@@ -342,4 +344,5 @@ Show all admin / management commands, grouped by category.
 | Set coverage manager / ops contact / error channel | `/set-coverage-manager` · `/set-ops-contact` · `/set-error-channel` |
 | Re-run a failed job | `/rerun-job` |
 | Turn automated DMs on/off | `/bot-config` |
+| Check bot health / schedule / recent errors (owner) | `/bot-status` |
 | See all commands | `/help` · `/help-admin` |

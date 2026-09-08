@@ -134,7 +134,7 @@ Cancels the custom game and deletes its post. Get the ID from the post or the bo
 
 ### Coverage Requests
 
-Coverage requests are posted by cast members via `/coverage-request`. Each requested date/time becomes its own **shift post** with a unique Shift ID shown at the bottom. Multi-date requests also get a shared **header post** above all the shift posts.
+Coverage requests are posted by cast members via `/coverage-request`. A **linked** cast member (see [Member Management](#2-member-management)) is shown a picker of their own upcoming Bookeo shifts for the chosen show and can check off any number at once; an **Enter shift manually** button is always available too, for an unlinked member or a shift Bookeo doesn't know about. Both paths post identically. Each requested date/time becomes its own **shift post** with a unique Shift ID shown at the bottom. Multi-date requests also get a shared **header post** above all the shift posts.
 
 **`/cancel-coverage-request request_id:N`**
 Cancels a single shift by its Shift ID. The shift post is updated to show it's cancelled rather than deleted — the channel history is preserved. If it was the last remaining shift in the request, the header post is updated to reflect that everything has been resolved. The requester or any admin can run this command.
@@ -246,6 +246,17 @@ Every scheduled job (meeting reminders, coverage/game role-pings, shift DMs, EOD
 Re-run any scheduled job on demand (no redeploy) and get a sent/failed/skipped report. After a failure notice, this is how you recover.
 - For **Coverage role pings**, `mode` is `All` (re-ping every still-missing post) or `Smart` (skip posts already pinged today), and `preview:True` shows what would be sent without sending.
 
+### Bot Status (owner only)
+
+**`/bot-status`**
+A live, at-a-glance health snapshot — **owner only**, ephemeral. Useful as a first stop when something seems off, or as a quick daily check.
+
+- **💓 Health** — process uptime, Discord connection state, Bookeo reachability (reachable / stale-serving-cache / unreachable).
+- **⏭️ Next scheduled runs** — every job's next fire time.
+- **🗂️ Last run** — each job's most recent result (🟢 ok / 🔴 error) with when it finished and how long it took.
+- **📊 Data at a glance** — open coverage shifts, open custom games, unconfirmed (ready-to-fill) items, pending check-ins today, and how many of today's Bookeo cast aren't linked yet.
+- **⚠️ Recent errors** — the last few entries from the same error feed that populates the error channel.
+
 ---
 
 ## 8. Cleanup
@@ -309,6 +320,7 @@ If the Discord post was already manually deleted, the purge still cleans up the 
 | `/set-error-channel` | Set the channel for bot error + job-failure messages |
 | `/set-ops-contact` | Set who is DM'd when a scheduled job fails |
 | `/rerun-job` | Re-run a scheduled job on demand (all / smart / preview) |
+| `/bot-status` | (Owner only) Live health, schedule, and recent-error snapshot |
 | **Cleanup** | |
 | `/purge` | Hard-delete a coverage shift or custom game record and its post |
 | **Help** | |
