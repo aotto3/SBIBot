@@ -15,7 +15,7 @@
 | R009 | any private interaction reply | `flags: MessageFlags.Ephemeral`. `ephemeral: true` is deprecated; fix on touch. | 0 | 0 |
 | R010 | any file importing Routes | `require('discord-api-types/v10')`. NOT `@discordjs/rest`. | 0 | 0 |
 | R011 | add/rename/change options on slash command | `npm run deploy-commands` after. Guild-scoped = instant; skipping = command not updated. | 0 | 0 |
-| R012 | any Bookeo API call with date range | Client-side filter: `shifts.filter(s => s.date >= from && s.date <= to)`. bookeo-asst ignores `to`. | 0 | 0 |
+| R012 | any Bookeo API call with date range | Keep the client-side filter `shifts.filter(s => s.date >= from && s.date <= to)` as a defensive measure (third-party API). `getSchedule` sends `start`/`end` on the wire — NOT `from`/`to` (ignored) — with `end` exclusive, so it adds +1 day to keep `to` inclusive; 31-day max span per call. | 0 | 0 |
 | R013 | cancelling via /open-coverage button | Edit post to cancelled state. Never `message.delete()`. (/cancel-custom-game slash cmd still deletes.) | 0 | 0 |
 | R014 | any change to startup sequence in index.js | `scheduler.start()` must come AFTER `seedAndScheduleToday()` resolves. | 0 | 0 |
 | R015 | adding a new show | Add to `SHOWS` in `lib/shows.js` + abbreviation map in `lib/bookeo.js` + `SHOW_GROUPS` in bookeo-asst `upcoming.py`. | 0 | 0 |
