@@ -3,6 +3,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const bookeo    = require('../lib/bookeo');
 const scheduler = require('../lib/scheduler');
+const jobRuns   = require('../lib/job-runs');
 const utils     = require('../lib/utils');
 const { isOwner } = require('../lib/owner');
 const { buildStatusEmbed } = require('../lib/bot-status');
@@ -45,13 +46,33 @@ module.exports = {
       bookeoState = 'unreachable';
     }
 
+    // Merge next-fire (schedule) with last-run (instrumentation), keyed by job.
+    // lastRun is null (not undefined) for a job that has never run, so the embed
+    // renders "no runs recorded" rather than omitting the section.
+    const lastRuns = jobRuns.getLastRuns();
+    const jobs = scheduler.buildJobScheduleView(now).map(j => {
+      const lr = lastRuns[j.key];
+      return {
+        ...j,
+        lastRun: lr
+          ? {
+              status:       lr.status,
+              finishedAtMs: lr.finishedAtMs,
+              startedAtMs:  lr.startedAtMs,
+              durationMs:   lr.durationMs,
+              error:        lr.error,
+            }
+          : null,
+      };
+    });
+
     const snapshot = {
       health: {
         uptimeSec: process.uptime(),
         discord:   discordState(interaction.client),
         bookeo:    bookeoState,
       },
-      jobs: scheduler.buildJobScheduleView(now),
+      jobs,
     };
 
     return interaction.editReply({ embeds: [buildStatusEmbed(snapshot, { now })] });

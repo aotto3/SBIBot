@@ -111,6 +111,43 @@ test('buildStatusEmbed — skeleton (no lastRun) shows a run-history placeholder
   assert.ok(/will appear here/i.test(lastRun.value), 'shows placeholder until jobs have run');
 });
 
+// ─── buildStatusEmbed — last run (slice #158) ────────────────────────────────
+
+test('buildStatusEmbed — last run renders success and failure with duration', () => {
+  const okAt   = Date.parse('2026-05-01T11:00:00-05:00');
+  const failAt = Date.parse('2026-05-01T08:00:00-05:00');
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [
+      { key: 'coverage-pings', label: 'Coverage role pings', nextRun: NOW + 3600000,
+        lastRun: { status: 'ok', finishedAtMs: okAt, durationMs: 820 } },
+      { key: 'meeting-reminders', label: 'Meeting reminders', nextRun: NOW + 3600000,
+        lastRun: { status: 'error', finishedAtMs: failAt, durationMs: 12000, error: 'boom' } },
+    ],
+  }, { now: NOW });
+
+  const lastRun = field(embed, 'Last run');
+  assert.ok(lastRun.value.includes('🟢'), 'success icon for ok run');
+  assert.ok(lastRun.value.includes('🔴'), 'failure icon for error run');
+  assert.ok(lastRun.value.includes('820ms'), 'renders duration');
+  assert.ok(lastRun.value.includes(`<t:${Math.floor(okAt / 1000)}:R>`), 'renders finish time as timestamp');
+});
+
+test('buildStatusEmbed — a never-run job (lastRun null) renders "no runs recorded"', () => {
+  const embed = buildStatusEmbed({
+    health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
+    jobs: [
+      { key: 'coverage-pings', label: 'Coverage role pings', nextRun: NOW + 3600000,
+        lastRun: { status: 'ok', finishedAtMs: NOW - 1000, durationMs: 50 } },
+      { key: 'maybe-nudge', label: 'Weekly maybe-nudge', nextRun: NOW + 3600000, lastRun: null },
+    ],
+  }, { now: NOW });
+
+  const lastRun = field(embed, 'Last run');
+  assert.ok(/no runs recorded/i.test(lastRun.value), 'never-run job shown clearly');
+  assert.ok(lastRun.value.includes('Weekly maybe-nudge'), 'lists the never-run job by label');
+});
+
 test('buildStatusEmbed — no jobs → only the health field, no schedule/last-run', () => {
   const embed = buildStatusEmbed({
     health: { uptimeSec: 10, discord: 'ready', bookeo: 'reachable' },
